@@ -11,9 +11,11 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { useAuth } from "@/contexts/auth-context"
 import Link from "next/link"
+import { usePathname } from "next/navigation"
 
 export function UserNav() {
   const { user, signInWithGoogle, signOut } = useAuth()
+  const pathname = usePathname()
 
   if (!user) {
     return (
