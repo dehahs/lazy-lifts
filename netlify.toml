@@ -2,9 +2,16 @@
   command = "npm run build"
   publish = ".next"
 
+# For subdirectory deployment, uncomment these redirects
+# [[redirects]]
+#   from = "/lazy-lifts/*"
+#   to = "/lazy-lifts/:splat"
+#   status = 200
+
+# This ensures all routes are handled by Next.js
 [[redirects]]
-  from = "/lazy-lifts/*"
-  to = "/lazy-lifts/:splat"
+  from = "/*"
+  to = "/index.html"
   status = 200
 
 [[headers]]

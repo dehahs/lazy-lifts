@@ -21,9 +21,9 @@ const nextConfig = {
     parallelServerBuildTraces: true,
     parallelServerCompiles: true,
   },
-  // Configuration for subdirectory deployment
-  basePath: '/lazy-lifts',
-  assetPrefix: '/lazy-lifts',
+  // For standalone deployment, uncomment these if you want to deploy to a subdirectory
+  // basePath: '/lazy-lifts',
+  // assetPrefix: '/lazy-lifts',
 }
 
 mergeConfig(nextConfig, userConfig)
