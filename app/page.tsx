@@ -6,7 +6,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { cn } from "@/lib/utils"
 import { UserNav } from "@/components/user-nav"
 import { useAuth } from "@/contexts/auth-context"
-import { doc, setDoc } from "firebase/firestore"
+import { doc, setDoc, collection, getDocs, query, where, orderBy, limit, deleteDoc } from "firebase/firestore"
 import { db } from "@/lib/firebase"
 
 // Define workout program structure
@@ -22,61 +22,63 @@ type WorkoutDay = {
   completed?: Date | null
 }
 
-type WorkoutWeek = {
+type WorkoutWk = {
   [key: string]: WorkoutDay
 }
 
 type WorkoutProgram = {
-  [key: string]: WorkoutWeek
+  [key: string]: WorkoutWk
 }
+
+type MigrationPromise = Promise<void>
 
 export default function LiftingApp() {
   const { user } = useAuth()
   // Initialize workout program data
   const initialProgram: WorkoutProgram = {
-    "Week 1": {
+    "Wk 1": {
       Mon: { name: "Chest", exercises: generateExercises("Chest") },
       Tue: { name: "Arms A", exercises: generateExercises("Arms A") },
       Thu: { name: "Legs", exercises: generateExercises("Legs") },
       Fri: { name: "Back", exercises: generateExercises("Back") },
     },
-    "Week 2": {
+    "Wk 2": {
       Mon: { name: "Shoulders", exercises: generateExercises("Shoulders") },
       Tue: { name: "Chest", exercises: generateExercises("Chest") },
       Thu: { name: "Arms B", exercises: generateExercises("Arms B") },
       Fri: { name: "Legs", exercises: generateExercises("Legs") },
     },
-    "Week 3": {
+    "Wk 3": {
       Mon: { name: "Back", exercises: generateExercises("Back") },
       Tue: { name: "Shoulders", exercises: generateExercises("Shoulders") },
       Thu: { name: "Chest", exercises: generateExercises("Chest") },
       Fri: { name: "Arms C", exercises: generateExercises("Arms C") },
     },
-    "Week 4": {
+    "Wk 4": {
       Mon: { name: "Legs", exercises: generateExercises("Legs") },
       Tue: { name: "Back", exercises: generateExercises("Back") },
       Thu: { name: "Shoulders", exercises: generateExercises("Shoulders") },
       Fri: { name: "Chest", exercises: generateExercises("Chest") },
     },
-    "Week 5": {
+    "Wk 5": {
       Mon: { name: "Arms D", exercises: generateExercises("Arms D") },
       Tue: { name: "Legs", exercises: generateExercises("Legs") },
       Thu: { name: "Shoulders", exercises: generateExercises("Shoulders") },
       Fri: { name: "Back", exercises: generateExercises("Back") },
     },
-    "Week 6": {
+    "Wk 6": {
       Mon: { name: "Chest", exercises: generateExercises("Chest") },
       Tue: { name: "Arms E", exercises: generateExercises("Arms E") },
       Thu: { name: "Legs", exercises: generateExercises("Legs") },
       Fri: { name: "Arms A2", exercises: generateExercises("Arms A2") },
     },
-    "Week 7": {
+    "Wk 7": {
       Mon: { name: "Shoulders", exercises: generateExercises("Shoulders") },
       Tue: { name: "Arms B2", exercises: generateExercises("Arms B2") },
       Thu: { name: "Back", exercises: generateExercises("Back") },
       Fri: { name: "Arms C2", exercises: generateExercises("Arms C2") },
     },
-    "Week 8": {
+    "Wk 8": {
       Mon: { name: "Chest", exercises: generateExercises("Chest") },
       Tue: { name: "Arms D2", exercises: generateExercises("Arms D2") },
       Thu: { name: "Legs", exercises: generateExercises("Legs") },
@@ -87,6 +89,110 @@ export default function LiftingApp() {
   const [program, setProgram] = useState<WorkoutProgram>(initialProgram)
   const [selectedWorkout, setSelectedWorkout] = useState<{ week: string; day: string } | null>(null)
   const [activeWorkout, setActiveWorkout] = useState<{ week: string; day: string } | null>(null)
+  const [currentCycle, setCurrentCycle] = useState<number>(1)
+  const [lastCompletedWorkout, setLastCompletedWorkout] = useState<{ week: string; day: string; date: Date } | null>(null)
+
+  // Load workouts from local storage or Firebase
+  useEffect(() => {
+    const loadSavedWorkouts = async () => {
+      // Load last completed workout from localStorage if it exists
+      const lastWorkoutData = localStorage.getItem('lastCompletedWorkout')
+      if (lastWorkoutData) {
+        try {
+          const lastWorkout = JSON.parse(lastWorkoutData)
+          // Convert date string back to Date object
+          lastWorkout.date = new Date(lastWorkout.date)
+          setLastCompletedWorkout(lastWorkout)
+        } catch (error) {
+          console.error("Error parsing last completed workout:", error)
+          localStorage.removeItem('lastCompletedWorkout')
+        }
+      }
+
+      if (user) {
+        // Load from Firebase for authenticated users
+        try {
+          const cyclesRef = collection(db, "workouts", user.uid, "cycles")
+          const cyclesSnapshot = await getDocs(query(cyclesRef, orderBy("cycleNumber", "desc"), limit(1)))
+          let latestCycle = 1
+          
+          if (!cyclesSnapshot.empty) {
+            latestCycle = cyclesSnapshot.docs[0].data().cycleNumber
+          }
+          setCurrentCycle(latestCycle)
+
+          const workoutsRef = collection(db, "workouts", user.uid, "completed")
+          const workoutsSnapshot = await getDocs(
+            query(workoutsRef, where("cycle", "==", latestCycle))
+          )
+          
+          const updatedProgram = { ...initialProgram }
+          
+          workoutsSnapshot.forEach((doc) => {
+            const data = doc.data()
+            const [week, day] = doc.id.split("-").slice(0, 2)
+            if (updatedProgram[week] && updatedProgram[week][day]) {
+              updatedProgram[week][day].completed = data.completedAt.toDate()
+            }
+          })
+          
+          setProgram(updatedProgram)
+
+          // Migrate local storage data if it exists
+          const localData = localStorage.getItem('workoutProgress')
+          if (localData) {
+            const { program: localProgram, cycle } = JSON.parse(localData)
+            const migratePromises: MigrationPromise[] = []
+
+            Object.entries(localProgram).forEach(([week, weekData]: [string, any]) => {
+              Object.entries(weekData).forEach(([day, dayData]: [string, any]) => {
+                if (dayData.completed) {
+                  const completionDate = new Date(dayData.completed)
+                  const workoutRef = doc(db, "workouts", user.uid, "completed", `${week}-${day}-${cycle}`)
+                  migratePromises.push(
+                    setDoc(workoutRef, {
+                      week,
+                      day,
+                      workoutName: dayData.name,
+                      completedAt: completionDate,
+                      cycle: cycle
+                    })
+                  )
+                }
+              })
+            })
+
+            if (migratePromises.length > 0) {
+              await Promise.all(migratePromises)
+              localStorage.removeItem('workoutProgress')
+              // Reload the data after migration
+              window.location.reload()
+            }
+          }
+        } catch (error) {
+          console.error("Error loading saved workouts:", error)
+        }
+      } else {
+        // Load from local storage for anonymous users
+        const localData = localStorage.getItem('workoutProgress')
+        if (localData) {
+          const { program: localProgram, cycle } = JSON.parse(localData)
+          // Convert ISO date strings back to Date objects
+          Object.keys(localProgram).forEach(week => {
+            Object.keys(localProgram[week]).forEach(day => {
+              if (localProgram[week][day].completed) {
+                localProgram[week][day].completed = new Date(localProgram[week][day].completed)
+              }
+            })
+          })
+          setProgram(localProgram)
+          setCurrentCycle(cycle)
+        }
+      }
+    }
+
+    loadSavedWorkouts()
+  }, [user])
 
   // Find the next unfinished workout on initial load
   useEffect(() => {
@@ -95,7 +201,7 @@ export default function LiftingApp() {
       setActiveWorkout(nextWorkout)
       setSelectedWorkout(nextWorkout)
     }
-  }, [])
+  }, [program])
 
   // Find the next unfinished workout
   const findNextUnfinishedWorkout = () => {
@@ -117,9 +223,9 @@ export default function LiftingApp() {
     setSelectedWorkout({ week, day })
   }
 
-  // Updated log workout function to save to Firebase
+  // Updated log workout function to handle both anonymous and authenticated users
   const handleLogWorkout = async () => {
-    if (!activeWorkout || !user) return
+    if (!activeWorkout) return
 
     const { week, day } = activeWorkout
     const completionDate = new Date()
@@ -128,30 +234,73 @@ export default function LiftingApp() {
     const updatedProgram = { ...program }
     updatedProgram[week][day].completed = completionDate
     setProgram(updatedProgram)
+    
+    // Store the last completed workout for potential rollback
+    const lastWorkout = { week, day, date: completionDate }
+    setLastCompletedWorkout(lastWorkout)
+    
+    // Save last completed workout to localStorage
+    localStorage.setItem('lastCompletedWorkout', JSON.stringify(lastWorkout))
 
-    // Save to Firebase
-    try {
-      const workoutRef = doc(db, "workouts", user.uid, "completed", `${week}-${day}`)
-      await setDoc(workoutRef, {
-        week,
-        day,
-        workoutName: program[week][day].name,
-        completedAt: completionDate,
-      })
-    } catch (error) {
-      console.error("Error saving workout:", error)
-      // Optionally, revert the local state if save fails
-      updatedProgram[week][day].completed = null
-      setProgram(updatedProgram)
+    if (user) {
+      // Save to Firebase for authenticated users
+      try {
+        const workoutRef = doc(db, "workouts", user.uid, "completed", `${week}-${day}-${currentCycle}`)
+        await setDoc(workoutRef, {
+          week,
+          day,
+          workoutName: program[week][day].name,
+          completedAt: completionDate,
+          cycle: currentCycle
+        })
+      } catch (error) {
+        console.error("Error saving workout:", error)
+        updatedProgram[week][day].completed = null
+        setProgram(updatedProgram)
+        setLastCompletedWorkout(null)
+        return
+      }
+    } else {
+      // Save to local storage for anonymous users
+      localStorage.setItem('workoutProgress', JSON.stringify({
+        program: updatedProgram,
+        cycle: currentCycle
+      }))
     }
 
     // Find next workout
     const nextWorkout = findNextUnfinishedWorkout()
 
-    // If all workouts are completed, reset the program
+    // If all workouts are completed, start a new cycle
     if (!nextWorkout) {
-      setProgram(initialProgram)
-      const firstWorkout = { week: "Week 1", day: "Mon" }
+      if (user) {
+        // Save cycle completion to Firebase for authenticated users
+        try {
+          const cycleRef = doc(db, "workouts", user.uid, "cycles", `cycle-${currentCycle}`)
+          await setDoc(cycleRef, {
+            cycleNumber: currentCycle,
+            completedAt: completionDate
+          })
+        } catch (error) {
+          console.error("Error saving cycle completion:", error)
+        }
+      }
+
+      // Start new cycle
+      const newCycle = currentCycle + 1
+      setCurrentCycle(newCycle)
+      const newProgram = { ...initialProgram }
+      setProgram(newProgram)
+
+      // Update local storage for anonymous users
+      if (!user) {
+        localStorage.setItem('workoutProgress', JSON.stringify({
+          program: newProgram,
+          cycle: newCycle
+        }))
+      }
+
+      const firstWorkout = { week: "Wk 1", day: "Mon" }
       setActiveWorkout(firstWorkout)
       setSelectedWorkout(firstWorkout)
     } else {
@@ -191,10 +340,61 @@ export default function LiftingApp() {
     return program[selectedWorkout.week][selectedWorkout.day]
   }
 
+  const handleUndoLastWorkout = async () => {
+    if (!lastCompletedWorkout) return
+    
+    const { week, day } = lastCompletedWorkout
+    
+    // Update local state
+    const updatedProgram = { ...program }
+    updatedProgram[week][day].completed = null
+    setProgram(updatedProgram)
+    
+    if (user) {
+      // Remove from Firebase for authenticated users
+      try {
+        const workoutRef = doc(db, "workouts", user.uid, "completed", `${week}-${day}-${currentCycle}`)
+        await deleteDoc(workoutRef)
+      } catch (error) {
+        console.error("Error removing workout:", error)
+        // Revert the local state change if Firebase deletion fails
+        updatedProgram[week][day].completed = lastCompletedWorkout.date
+        setProgram(updatedProgram)
+        return
+      }
+    } else {
+      // Update local storage for anonymous users
+      localStorage.setItem('workoutProgress', JSON.stringify({
+        program: updatedProgram,
+        cycle: currentCycle
+      }))
+    }
+    
+    // Reset the last completed workout
+    setLastCompletedWorkout(null)
+    localStorage.removeItem('lastCompletedWorkout')
+    
+    // Set the active workout to the one we just undid
+    setActiveWorkout({ week, day })
+    setSelectedWorkout({ week, day })
+  }
+
+  // Check if the last completed workout is recent (within the last hour)
+  const isRecentWorkout = () => {
+    if (!lastCompletedWorkout) return false
+    
+    const now = new Date()
+    const oneHourAgo = new Date(now.getTime() - 60 * 60 * 1000)
+    return lastCompletedWorkout.date > oneHourAgo
+  }
+
   return (
     <div className="container mx-auto py-8 px-4 max-w-3xl">
       <div className="flex justify-between items-center mb-8">
-        <h1 className="text-4xl font-bold">Lazy Lifts</h1>
+        <div>
+          <h1 className="text-4xl font-bold">Lazy Lifts</h1>
+          <p className="text-muted-foreground mt-2">Cycle {currentCycle}</p>
+        </div>
         <UserNav />
       </div>
 
@@ -280,6 +480,17 @@ export default function LiftingApp() {
                   onClick={handleLogWorkout}
                 >
                   Log workout
+                </Button>
+              )}
+              
+              {/* Undo Last Workout Button - only visible when there's a recent last completed workout */}
+              {lastCompletedWorkout && isRecentWorkout() && (
+                <Button
+                  onClick={handleUndoLastWorkout}
+                  variant="outline"
+                  className="w-full mt-2"
+                >
+                  Undo Last Workout
                 </Button>
               )}
             </>

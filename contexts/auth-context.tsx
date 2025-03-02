@@ -50,6 +50,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const signOutHandler = async () => {
     try {
       await signOut(auth)
+      localStorage.removeItem('workoutProgress')
+      window.location.reload()
     } catch (error) {
       console.error("Error signing out:", error)
     }
