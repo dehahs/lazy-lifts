@@ -1,10 +1,13 @@
 import type React from "react"
 import "./globals.css"
 import type { Metadata, Viewport } from "next"
-import { Inter } from "next/font/google"
+import { Fira_Sans_Condensed } from "next/font/google"
 import { AuthProvider } from "@/contexts/auth-context"
 
-const inter = Inter({ subsets: ["latin"] })
+const firaSansCondensed = Fira_Sans_Condensed({ 
+  subsets: ["latin"],
+  weight: ["300", "400", "500", "600", "700"]
+})
 
 export const viewport: Viewport = {
   themeColor: '#0f172a',
@@ -35,7 +38,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
         <link rel="apple-touch-icon" href="/icons/apple-icon-180.png" />
         <link rel="icon" type="image/png" sizes="196x196" href="/icons/favicon-196.png" />
       </head>
-      <body className={inter.className}>
+      <body className={firaSansCondensed.className}>
         <AuthProvider>{children}</AuthProvider>
       </body>
     </html>

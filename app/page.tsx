@@ -8,6 +8,7 @@ import { UserNav } from "@/components/user-nav"
 import { useAuth } from "@/contexts/auth-context"
 import { doc, setDoc, collection, getDocs, query, where, orderBy, limit, deleteDoc } from "firebase/firestore"
 import { db } from "@/lib/firebase"
+import Link from "next/link"
 
 // Define workout program structure
 type Exercise = {
@@ -390,42 +391,46 @@ export default function LiftingApp() {
 
   return (
     <div className="container mx-auto py-8 px-4 max-w-3xl">
-      <div className="flex justify-between items-center mb-8">
+      <div className="flex justify-between items-start mb-8">
         <div>
-          <h1 className="text-4xl font-bold">Lazy Lifts</h1>
-          <p className="text-muted-foreground mt-2">Cycle {currentCycle}</p>
+          <Link href="/" className="hover:opacity-80 transition-opacity">
+            <h1 className="text-5xl font-medium tracking-wide">Lazy Lifts</h1>
+            <p className="text-muted-foreground mt-1 text-lg tracking-wide">Cycle {currentCycle}</p>
+          </Link>
         </div>
         <UserNav />
       </div>
 
       {/* Program Summary Table */}
-      <div className="overflow-x-auto mb-8">
-        <Table className="border-collapse w-full">
-          <TableHeader>
+      <div className="overflow-x-auto mb-8 p-0.5">
+        <Table className="w-full schedule-table">
+          <TableHeader className="schedule-header p-1">
             <TableRow>
-              <TableHead className="border"></TableHead>
-              <TableHead className="border">Mon</TableHead>
-              <TableHead className="border">Tue</TableHead>
-              <TableHead className="border">Thu</TableHead>
-              <TableHead className="border">Fri</TableHead>
+              <TableHead className="bg-slate-100"></TableHead>
+              <TableHead className="bg-slate-100">Mon</TableHead>
+              <TableHead className="bg-slate-100">Tue</TableHead>
+              <TableHead className="bg-slate-100">Thu</TableHead>
+              <TableHead className="bg-slate-100">Fri</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {Object.entries(program).map(([week, weekData]) => (
               <TableRow key={week}>
-                <TableCell className="border font-medium">{week}</TableCell>
+                <TableCell className="font-medium bg-slate-100 p-1">{week}</TableCell>
                 {["Mon", "Tue", "Thu", "Fri"].map((day) => (
                   <TableCell
                     key={`${week}-${day}`}
                     className={cn(
-                      "border cursor-pointer hover:bg-muted/50",
+                      "cursor-pointer py-3 p-1",
                       activeWorkout && activeWorkout.week === week && activeWorkout.day === day
-                        ? "bg-red-500 text-white hover:bg-red-600"
+                        ? selectedWorkout && selectedWorkout.week === activeWorkout.week && selectedWorkout.day === activeWorkout.day
+                          ? "latest-incomplete hover:bg-red-600"
+                          : "latest-incomplete-dimmed hover:bg-red-600"
                         : selectedWorkout && selectedWorkout.week === week && selectedWorkout.day === day
-                          ? "text-red-500 border-red-500 border-2"
+                          ? "selected-day selected-cell hover:bg-transparent"
                           : weekData[day]?.completed
-                            ? "text-gray-400"
-                            : "text-black",
+                            ? "completed"
+                            : "incomplete",
                     )}
                     onClick={() => handleSelectWorkout(week, day)}
                   >
@@ -447,9 +452,11 @@ export default function LiftingApp() {
                 <Table className="border-collapse w-full">
                   <TableHeader>
                     <TableRow>
-                      <TableHead className="border text-left text-lg font-bold" colSpan={3}>
+                      <TableHead className="border text-left text-lg font-bold">
                         {getSelectedWorkoutDetails()?.name}
                       </TableHead>
+                      <TableHead className="border text-center font-bold">Sets</TableHead>
+                      <TableHead className="border text-center font-bold">Reps</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -476,10 +483,21 @@ export default function LiftingApp() {
               {/* Log Workout Button - only for active workout */}
               {isActiveWorkout() && !getSelectedWorkoutDetails()?.completed && (
                 <Button
-                  className="w-full mt-8 bg-purple-600 hover:bg-purple-700 text-white py-4"
+                  className="w-full mt-8 bg-red-500 hover:bg-red-600 text-white py-4"
                   onClick={handleLogWorkout}
                 >
-                  Log workout
+                  Did you even lift?
+                </Button>
+              )}
+              
+              {/* Go to latest workout button - visible when not on active workout */}
+              {!isActiveWorkout() && activeWorkout && (
+                <Button
+                  onClick={() => handleSelectWorkout(activeWorkout.week, activeWorkout.day)}
+                  variant="outline"
+                  className="w-full mt-8"
+                >
+                  Go to latest workout
                 </Button>
               )}
               

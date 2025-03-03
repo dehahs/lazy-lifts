@@ -97,7 +97,7 @@ export default function ProfilePage() {
               <AvatarFallback>{user.displayName?.[0] || "U"}</AvatarFallback>
             </Avatar>
             <div>
-              <CardTitle>{user.displayName || "Anonymous User"}</CardTitle>
+              <CardTitle className="text-2xl tracking-wide">{user.displayName || "Anonymous User"}</CardTitle>
               <CardDescription>{user.email || "No email provided"}</CardDescription>
             </div>
           </div>
@@ -105,7 +105,7 @@ export default function ProfilePage() {
         <CardContent>
           <div className="space-y-4">
             <div>
-              <h3 className="font-medium">Account Type</h3>
+              <h3 className="font-medium tracking-wide text-lg">Account Type</h3>
               <p className="text-sm text-muted-foreground">
                 {user.isAnonymous ? "Anonymous Account" : "Google Account"}
               </p>

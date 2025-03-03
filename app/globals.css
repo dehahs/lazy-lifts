@@ -72,6 +72,217 @@
   }
   body {
     @apply bg-background text-foreground;
+    letter-spacing: 0.01em;
+    font-size: 1rem;
   }
+  h1, h2, h3, h4, h5, h6 {
+    letter-spacing: 0.01em;
+    font-weight: 500;
+  }
+  .text-lg, .text-xl, .text-2xl, .text-3xl, .text-4xl {
+    letter-spacing: 0.01em;
+  }
+  button, .button {
+    letter-spacing: 0.015em;
+  }
+  
+  .text-xs {
+    font-size: 0.8rem !important;
+  }
+  .text-sm {
+    font-size: 0.9rem !important;
+  }
+  .text-base {
+    font-size: 1rem !important;
+  }
+  .text-lg {
+    font-size: 1.2rem !important;
+  }
+  .text-xl {
+    font-size: 1.35rem !important;
+  }
+  .text-2xl {
+    font-size: 1.6rem !important;
+  }
+  .text-3xl {
+    font-size: 1.9rem !important;
+  }
+  .text-4xl {
+    font-size: 2.2rem !important;
+  }
+  .text-5xl {
+    font-size: 2.7rem !important;
+  }
+}
+
+/* Custom styles for the schedule table */
+.schedule-table {
+  border-radius: 8px;
+  overflow: visible; /* Change from hidden to visible to prevent border clipping */
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+  border-collapse: separate;
+  border-spacing: 0;
+  border: 1px solid #e2e8f0;
+}
+
+/* Global styles for interactive elements */
+a {
+  color: #ef4444;
+  transition: color 0.2s ease;
+}
+
+a:hover {
+  color: #dc2626; /* Slightly darker shade for hover */
+}
+
+button:not([class*="bg-"]):not([class*="hover:bg-"]):not([class*="text-white"]):not([class*="border-"]):hover {
+  color: #ef4444;
+}
+
+.btn-primary, 
+button.bg-primary,
+button:not([class*="bg-"]):not([class*="border-"]):not([class*="text-"]):not([class*="hover:"]) {
+  background-color: #ef4444 !important;
+  color: white !important;
+}
+
+.btn-primary:hover, 
+button.bg-primary:hover,
+button:not([class*="bg-"]):not([class*="border-"]):not([class*="text-"]):not([class*="hover:"]):hover {
+  background-color: #dc2626 !important;
+}
+
+button[variant="outline"]:not([class*="border-"]) {
+  border-color: #ef4444 !important;
+  color: #ef4444 !important;
+}
+
+button[variant="outline"]:not([class*="border-"]):hover {
+  background-color: rgba(239, 68, 68, 0.1) !important;
+}
+
+/* Add specific styling for the first row and column to ensure all borders are visible */
+.schedule-table th:first-child {
+  border-top-left-radius: 8px;
+}
+
+.schedule-table th:last-child {
+  border-top-right-radius: 8px;
+}
+
+.schedule-table tr:last-child td:first-child {
+  border-bottom-left-radius: 8px;
+}
+
+.schedule-table tr:last-child td:last-child {
+  border-bottom-right-radius: 8px;
+}
+
+/* Ensure the bottom border of the last row is visible */
+.schedule-table tr:last-child td {
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.schedule-table th {
+  font-weight: 600;
+  border-bottom: 1px solid #e2e8f0;
+  border-left: none;
+  border-right: none;
+  border-top: none;
+  text-align: left; /* Make header text left-aligned */
+  padding-left: 1rem; /* Add some padding for better alignment */
+}
+
+.schedule-header {
+  background-color: #f8fafc;
+}
+
+.schedule-table td {
+  transition: all 0.2s ease;
+  border-bottom: 1px solid #e2e8f0;
+  border-left: none;
+  border-right: none;
+  border-top: none;
+  /* Add a transparent border to all cells to maintain consistent sizing */
+  outline: 2px solid transparent;
+  box-sizing: border-box;
+  position: relative;
+  text-align: left; /* Make cell text left-aligned */
+  padding-left: 1rem; /* Add some padding for better alignment */
+}
+
+/* Add left border to first column */
+.schedule-table td:first-child,
+.schedule-table th:first-child {
+  border-left: 1px solid #e2e8f0;
+}
+
+/* Add right border to last column */
+.schedule-table td:last-child,
+.schedule-table th:last-child {
+  border-right: 1px solid #e2e8f0;
+}
+
+/* Add top border to first row */
+.schedule-table tr:first-child th {
+  border-top: 1px solid #e2e8f0;
+}
+
+/* Fix for the container to ensure borders are visible */
+.overflow-x-auto {
+  padding-bottom: 1px;
+  padding-right: 1px;
+}
+
+.schedule-table td:not(:first-child):hover {
+  transform: scale(1.02);
+}
+
+/* Prevent hover effects on selected cell */
+.schedule-table td.selected-cell:hover {
+  transform: none !important;
+  background-color: transparent !important;
+}
+
+/* Style for selected cell with full border */
+.schedule-table .selected-cell {
+  outline: 2px solid #ef4444;
+  position: relative;
+  z-index: 10;
+  background-color: transparent !important; /* Ensure no background color is applied */
+}
+
+/* Styles for different workout states */
+/* Incomplete workout - red text */
+.schedule-table td.incomplete {
+  color: hsl(0, 84%, 20%);
+  font-weight: 400;
+}
+
+/* Completed workout - gray background */
+.schedule-table td.completed {
+  background-color: #e5e7eb;
+  color: #6b7280;
+}
+
+/* Latest incomplete workout - red background with white text */
+.schedule-table td.latest-incomplete {
+  background-color: #ef4444;
+  color: white;
+  font-weight: 500;
+}
+
+/* Latest incomplete workout when not selected - reduced opacity */
+.schedule-table td.latest-incomplete-dimmed {
+  background-color: rgba(239, 68, 68, 0.7); /* #ef4444 with 70% opacity (30% transparency) */
+  color: white;
+  font-weight: 500;
+}
+
+/* Selected day - red border with red text (already defined above with .selected-cell) */
+.schedule-table td.selected-day {
+  color: #ef4444;
+  font-weight: 500;
+  background-color: transparent !important; /* Ensure no background color is applied */
 }
 

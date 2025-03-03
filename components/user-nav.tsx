@@ -17,37 +17,43 @@ export function UserNav() {
   const { user, signInWithGoogle, signOut } = useAuth()
   const pathname = usePathname()
 
-  if (!user) {
-    return (
-      <Button onClick={() => signInWithGoogle()} variant="outline">
-        Sign in with Google
-      </Button>
-    )
-  }
-
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button variant="ghost" className="relative h-8 w-8 rounded-full">
-          <Avatar className="h-8 w-8">
-            <AvatarImage src={user.photoURL || undefined} alt={user.displayName || "User avatar"} />
-            <AvatarFallback>{user.displayName?.[0] || "U"}</AvatarFallback>
-          </Avatar>
+    <div className="flex items-center gap-4">
+      <Link href="/about">
+        <Button variant="ghost" className="text-base font-medium">
+          What is this?
         </Button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent className="w-56" align="end">
-        <DropdownMenuLabel>My Account</DropdownMenuLabel>
-        <DropdownMenuSeparator />
-        <DropdownMenuItem asChild>
-          <Link href="/profile" className="cursor-pointer">
-            Profile
-          </Link>
-        </DropdownMenuItem>
-        <DropdownMenuItem onClick={() => signOut()} className="cursor-pointer">
-          Log out
-        </DropdownMenuItem>
-      </DropdownMenuContent>
-    </DropdownMenu>
+      </Link>
+      
+      {!user ? (
+        <Button onClick={() => signInWithGoogle()} variant="outline">
+          Sign in
+        </Button>
+      ) : (
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="ghost" className="relative h-9 w-9 rounded-full">
+              <Avatar className="h-9 w-9">
+                <AvatarImage src={user.photoURL || undefined} alt={user.displayName || "User avatar"} />
+                <AvatarFallback>{user.displayName?.[0] || "U"}</AvatarFallback>
+              </Avatar>
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent className="w-56" align="end">
+            <DropdownMenuLabel className="text-base">My Account</DropdownMenuLabel>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem asChild className="text-base">
+              <Link href="/profile" className="cursor-pointer">
+                Profile
+              </Link>
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => signOut()} className="cursor-pointer text-base">
+              Log out
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      )}
+    </div>
   )
 }
 
