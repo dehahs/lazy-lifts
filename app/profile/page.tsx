@@ -6,7 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { useState, useEffect } from "react"
 import { collection, query, where, getDocs, deleteDoc, doc, orderBy, limit } from "firebase/firestore"
-import { db } from "@/lib/firebase"
+import { db, safeGetDocs } from "@/lib/firebase"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { ArrowLeft } from "lucide-react"
@@ -24,7 +24,7 @@ export default function ProfilePage() {
 
       try {
         const cyclesRef = collection(db, "workouts", user.uid, "cycles")
-        const cyclesSnapshot = await getDocs(query(cyclesRef, orderBy("cycleNumber", "desc"), limit(1)))
+        const cyclesSnapshot = await safeGetDocs(query(cyclesRef, orderBy("cycleNumber", "desc"), limit(1)))
         
         if (!cyclesSnapshot.empty) {
           setCurrentCycle(cyclesSnapshot.docs[0].data().cycleNumber)
@@ -45,7 +45,7 @@ export default function ProfilePage() {
       // Get all workouts from current cycle
       const workoutsRef = collection(db, "workouts", user.uid, "completed")
       const currentCycleQuery = query(workoutsRef, where("cycle", "==", currentCycle))
-      const workoutsSnapshot = await getDocs(currentCycleQuery)
+      const workoutsSnapshot = await safeGetDocs(currentCycleQuery)
 
       // Delete all workouts from current cycle
       const deletePromises = workoutsSnapshot.docs.map(doc => deleteDoc(doc.ref))

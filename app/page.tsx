@@ -7,7 +7,7 @@ import { cn } from "@/lib/utils"
 import { UserNav } from "@/components/user-nav"
 import { useAuth } from "@/contexts/auth-context"
 import { doc, setDoc, collection, getDocs, query, where, orderBy, limit, deleteDoc } from "firebase/firestore"
-import { db } from "@/lib/firebase"
+import { db, createUserDocument, safeGetDocs, createDocumentFallback } from "@/lib/firebase"
 import Link from "next/link"
 
 // Define workout program structure
@@ -114,7 +114,7 @@ export default function LiftingApp() {
         // Load from Firebase for authenticated users
         try {
           const cyclesRef = collection(db, "workouts", user.uid, "cycles")
-          const cyclesSnapshot = await getDocs(query(cyclesRef, orderBy("cycleNumber", "desc"), limit(1)))
+          const cyclesSnapshot = await safeGetDocs(query(cyclesRef, orderBy("cycleNumber", "desc"), limit(1)))
           let latestCycle = 1
           
           if (!cyclesSnapshot.empty) {
@@ -123,19 +123,21 @@ export default function LiftingApp() {
           setCurrentCycle(latestCycle)
 
           const workoutsRef = collection(db, "workouts", user.uid, "completed")
-          const workoutsSnapshot = await getDocs(
+          const workoutsSnapshot = await safeGetDocs(
             query(workoutsRef, where("cycle", "==", latestCycle))
           )
           
           const updatedProgram = { ...initialProgram }
           
-          workoutsSnapshot.forEach((doc) => {
-            const data = doc.data()
-            const [week, day] = doc.id.split("-").slice(0, 2)
-            if (updatedProgram[week] && updatedProgram[week][day]) {
-              updatedProgram[week][day].completed = data.completedAt.toDate()
-            }
-          })
+          if (!workoutsSnapshot.empty) {
+            workoutsSnapshot.forEach((doc) => {
+              const data = doc.data()
+              const [week, day] = doc.id.split("-").slice(0, 2)
+              if (updatedProgram[week] && updatedProgram[week][day]) {
+                updatedProgram[week][day].completed = data.completedAt.toDate()
+              }
+            })
+          }
           
           setProgram(updatedProgram)
 
@@ -149,16 +151,21 @@ export default function LiftingApp() {
               Object.entries(weekData).forEach(([day, dayData]: [string, any]) => {
                 if (dayData.completed) {
                   const completionDate = new Date(dayData.completed)
-                  const workoutRef = doc(db, "workouts", user.uid, "completed", `${week}-${day}-${cycle}`)
-                  migratePromises.push(
-                    setDoc(workoutRef, {
-                      week,
-                      day,
-                      workoutName: dayData.name,
-                      completedAt: completionDate,
-                      cycle: cycle
-                    })
-                  )
+                          migratePromises.push(
+          createUserDocument(
+            user.uid,
+            "workouts",
+            "completed",
+            `${week}-${day}-${cycle}`,
+            {
+              week,
+              day,
+              workoutName: dayData.name,
+              completedAt: completionDate,
+              cycle: cycle
+            }
+          )
+        )
                 }
               })
             })
@@ -246,14 +253,20 @@ export default function LiftingApp() {
     if (user) {
       // Save to Firebase for authenticated users
       try {
-        const workoutRef = doc(db, "workouts", user.uid, "completed", `${week}-${day}-${currentCycle}`)
-        await setDoc(workoutRef, {
-          week,
-          day,
-          workoutName: program[week][day].name,
-          completedAt: completionDate,
-          cycle: currentCycle
-        })
+
+        await createDocumentFallback(
+          user.uid,
+          "workouts",
+          "completed",
+          `${week}-${day}-${currentCycle}`,
+          {
+            week,
+            day,
+            workoutName: program[week][day].name,
+            completedAt: completionDate,
+            cycle: currentCycle
+          }
+        )
       } catch (error) {
         console.error("Error saving workout:", error)
         updatedProgram[week][day].completed = null
@@ -277,11 +290,16 @@ export default function LiftingApp() {
       if (user) {
         // Save cycle completion to Firebase for authenticated users
         try {
-          const cycleRef = doc(db, "workouts", user.uid, "cycles", `cycle-${currentCycle}`)
-          await setDoc(cycleRef, {
-            cycleNumber: currentCycle,
-            completedAt: completionDate
-          })
+          await createDocumentFallback(
+            user.uid,
+            "workouts",
+            "cycles",
+            `cycle-${currentCycle}`,
+            {
+              cycleNumber: currentCycle,
+              completedAt: completionDate
+            }
+          )
         } catch (error) {
           console.error("Error saving cycle completion:", error)
         }
@@ -400,6 +418,8 @@ export default function LiftingApp() {
         </div>
         <UserNav />
       </div>
+
+
 
       {/* Program Summary Table */}
       <div className="overflow-x-auto mb-8 p-0.5">
