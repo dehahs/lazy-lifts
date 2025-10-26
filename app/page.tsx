@@ -163,7 +163,27 @@ export default function LiftingApp() {
             })
           }
           
+          // Find next workout using the updated program directly
+          const weeks = Object.keys(updatedProgram)
+          const days = ["Mon", "Tue", "Thu", "Fri"]
+          let nextWorkout = null
+          
+          for (const week of weeks) {
+            for (const day of days) {
+              if (!updatedProgram[week][day].completed) {
+                nextWorkout = { week, day }
+                break
+              }
+            }
+            if (nextWorkout) break
+          }
+
           setProgram(updatedProgram)
+          
+          if (nextWorkout) {
+            setActiveWorkout(nextWorkout)
+            setSelectedWorkout(nextWorkout)
+          }
 
           // Migrate local storage data if it exists
           const localData = localStorage.getItem('workoutProgress')
@@ -217,8 +237,28 @@ export default function LiftingApp() {
               }
             })
           })
+          // Find next workout using the local program directly
+          const weeks = Object.keys(localProgram)
+          const days = ["Mon", "Tue", "Thu", "Fri"]
+          let nextWorkout = null
+          
+          for (const week of weeks) {
+            for (const day of days) {
+              if (!localProgram[week][day].completed) {
+                nextWorkout = { week, day }
+                break
+              }
+            }
+            if (nextWorkout) break
+          }
+
           setProgram(localProgram)
           setCurrentCycle(cycle)
+          
+          if (nextWorkout) {
+            setActiveWorkout(nextWorkout)
+            setSelectedWorkout(nextWorkout)
+          }
         }
       }
     }
@@ -226,14 +266,7 @@ export default function LiftingApp() {
     loadSavedWorkouts()
   }, [user])
 
-  // Find the next unfinished workout on initial load
-  useEffect(() => {
-    const nextWorkout = findNextUnfinishedWorkout()
-    if (nextWorkout) {
-      setActiveWorkout(nextWorkout)
-      setSelectedWorkout(nextWorkout)
-    }
-  }, [program])
+  // This effect was moved into the data loading logic
 
   // Find the next unfinished workout
   const findNextUnfinishedWorkout = () => {
@@ -305,11 +338,10 @@ export default function LiftingApp() {
       }))
     }
 
-    // Find next workout
-    const nextWorkout = findNextUnfinishedWorkout()
-
-    // If all workouts are completed, start a new cycle
+    // Check if this was the last workout in the cycle
+    const nextWorkout = findNextUnfinishedWorkout();
     if (!nextWorkout) {
+      // Start a new cycle but don't change the view
       if (user) {
         try {
           console.log('Starting cycle transition...');
@@ -352,10 +384,10 @@ export default function LiftingApp() {
           setProgram(newProgram)
           console.log('Updated local state');
 
+          // Don't automatically change the view, just update the active workout for the new cycle
           const firstWorkout = { week: "Wk 1", day: "Mon" }
           setActiveWorkout(firstWorkout)
-          setSelectedWorkout(firstWorkout)
-          console.log('Set first workout as active')
+          console.log('Updated active workout for new cycle')
 
         } catch (error) {
           console.error("Error transitioning to new cycle:", error)
@@ -375,14 +407,13 @@ export default function LiftingApp() {
           cycle: newCycle
         }))
 
+        // Don't automatically change the view, just update the active workout for the new cycle
         const firstWorkout = { week: "Wk 1", day: "Mon" }
         setActiveWorkout(firstWorkout)
-        setSelectedWorkout(firstWorkout)
       }
-    } else {
-      setActiveWorkout(nextWorkout)
-      setSelectedWorkout(nextWorkout)
     }
+    // We no longer automatically update the active/selected workout
+    // This will only happen on page refresh or revisit
   }
 
   // Check if selected workout is the active one
