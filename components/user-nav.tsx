@@ -30,6 +30,11 @@ export function UserNav() {
             Stats
           </Button>
         </Link>
+        <Link href="/calories">
+          <Button variant="ghost" className="text-base font-medium">
+            Calories
+          </Button>
+        </Link>
       </div>
       
       {!user ? (

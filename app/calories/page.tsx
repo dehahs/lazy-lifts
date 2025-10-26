@@ -1,0 +1,188 @@
+"use client"
+
+import { useState, useEffect } from "react"
+import { Button } from "@/components/ui/button"
+import { UserNav } from "@/components/user-nav"
+import Link from "next/link"
+
+export default function CaloriesPage() {
+  const [transcript, setTranscript] = useState("")
+  const [isListening, setIsListening] = useState(false)
+  const [isOnline, setIsOnline] = useState(true)
+
+  // Monitor online/offline status
+  useEffect(() => {
+    const handleOnline = () => setIsOnline(true)
+    const handleOffline = () => setIsOnline(false)
+
+    // Set initial status
+    setIsOnline(navigator.onLine)
+
+    // Add event listeners
+    window.addEventListener('online', handleOnline)
+    window.addEventListener('offline', handleOffline)
+
+    return () => {
+      window.removeEventListener('online', handleOnline)
+      window.removeEventListener('offline', handleOffline)
+    }
+  }, [])
+
+  const [debugInfo, setDebugInfo] = useState<string[]>([])
+
+  const addDebugInfo = (info: string) => {
+    setDebugInfo(prev => [...prev, `${new Date().toLocaleTimeString()}: ${info}`])
+  }
+
+  useEffect(() => {
+    // Check browser compatibility on mount
+    const isDia = /Electron/.test(navigator.userAgent)
+    const isChromeOrEdge = /Chrome|Edge/.test(navigator.userAgent) && !/Edg\//.test(navigator.userAgent)
+    
+    if (isDia) {
+      addDebugInfo('You are using Dia (Electron-based browser)')
+      addDebugInfo('Speech recognition may not work in Dia due to Electron security restrictions')
+      addDebugInfo('Please use Chrome, Edge, or another Chromium-based browser for this feature')
+    } else if (!isChromeOrEdge) {
+      addDebugInfo('Warning: Speech recognition works best in Chrome or Edge browsers')
+    }
+    
+    if (!('webkitSpeechRecognition' in window)) {
+      addDebugInfo('Error: Speech recognition is not supported in this browser')
+    } else {
+      addDebugInfo('Speech recognition API is available in this browser')
+    }
+  }, [])
+
+  const startListening = () => {
+    if (!('webkitSpeechRecognition' in window)) {
+      alert('Speech recognition is not supported in this browser. Please use Chrome.')
+      return
+    }
+
+    addDebugInfo('Starting speech recognition...')
+    const recognition = new (window as any).webkitSpeechRecognition()
+    recognition.continuous = false
+    recognition.interimResults = false
+    
+    // Add more configuration for debugging
+    recognition.lang = 'en-US' // Explicitly set language
+    addDebugInfo(`Speech recognition configured with language: ${recognition.lang}`)
+
+    recognition.onstart = () => {
+      setIsListening(true)
+    }
+
+    recognition.onresult = (event: any) => {
+      const transcript = event.results[0][0].transcript
+      setTranscript(transcript)
+      setIsListening(false)
+    }
+
+    recognition.onerror = (event: any) => {
+      setIsListening(false)
+      
+      const errorMessages: { [key: string]: string } = {
+        'network': 'Network error. Please check your internet connection.',
+        'no-speech': 'No speech was detected. Please try again.',
+        'audio-capture': 'No microphone was found or microphone access was denied.',
+        'not-allowed': 'Microphone permission was denied. Please allow microphone access.',
+        'aborted': 'Speech recognition was aborted.',
+        'default': 'An error occurred with speech recognition.'
+      }
+
+      const message = errorMessages[event.error] || errorMessages.default
+      setTranscript(`Error: ${message}`)
+      
+      // Add detailed error information
+      addDebugInfo(`Speech recognition error: ${event.error}`)
+      addDebugInfo(`Error message: ${message}`)
+      
+      if (event.error === 'network') {
+        const isDia = /Electron/.test(navigator.userAgent)
+        if (isDia) {
+          addDebugInfo('Network error in Dia browser:')
+          addDebugInfo('The speech recognition feature is not fully supported in Dia')
+          addDebugInfo('Please try using Chrome, Edge, or another Chromium-based browser')
+          addDebugInfo('This is a known limitation with Electron-based browsers')
+        } else {
+          addDebugInfo('Troubleshooting tips for network error:')
+          addDebugInfo('1. Check if you can access google.com in your browser')
+          addDebugInfo('2. Check if your firewall is blocking WebRTC or speech recognition')
+          addDebugInfo('3. Try using a different Chrome profile or clearing browser data')
+          addDebugInfo('4. If using a VPN, try disabling it temporarily')
+        }
+      }
+    }
+
+    recognition.onend = () => {
+      setIsListening(false)
+    }
+
+    recognition.start()
+  }
+
+  return (
+    <div className="container mx-auto py-8 px-4 max-w-3xl">
+      <div className="flex justify-between items-start mb-8">
+        <div>
+          <Link href="/" className="hover:opacity-80 transition-opacity">
+            <h1 className="text-5xl font-medium tracking-wide">Lazy Lifts</h1>
+          </Link>
+        </div>
+        <UserNav />
+      </div>
+
+      <div className="mt-8 space-y-6">
+        <div className="flex items-center gap-2 justify-center">
+          <div className={`w-3 h-3 rounded-full ${isOnline ? 'bg-green-500' : 'bg-red-500'}`} />
+          <p className="text-sm text-muted-foreground">
+            {isOnline ? 'Connected to speech services' : 'Offline - Speech recognition unavailable'}
+          </p>
+        </div>
+
+        <Button 
+          onClick={startListening}
+          className="w-full py-8 text-lg"
+          variant={isListening ? "destructive" : "default"}
+          disabled={!isOnline}
+        >
+          {isListening ? "Listening..." : "Start Speaking"}
+        </Button>
+
+        {transcript && (
+          <div className="p-4 rounded-lg border bg-card text-card-foreground">
+            <p className="text-lg">{transcript}</p>
+          </div>
+        )}
+
+        <div className="text-sm text-muted-foreground text-center">
+          <p>Note: Speech recognition requires an internet connection as it uses Google's speech services.</p>
+          {process.env.NODE_ENV === 'development' && (
+            <p className="mt-2">
+              Running in development mode - make sure you have a stable internet connection and your 
+              development environment isn't blocking external requests.
+            </p>
+          )}
+          
+          {/* Debug Information */}
+          {debugInfo.length > 0 && (
+            <div className="mt-4 p-4 bg-slate-100 rounded-lg text-left">
+              <p className="font-medium mb-2">Debug Information:</p>
+              {debugInfo.map((info, index) => (
+                <p key={index} className="text-xs font-mono">{info}</p>
+              ))}
+              <Button 
+                onClick={() => setDebugInfo([])} 
+                variant="outline" 
+                className="mt-2 text-xs"
+              >
+                Clear Debug Info
+              </Button>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
