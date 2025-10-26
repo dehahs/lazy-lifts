@@ -113,13 +113,34 @@ export default function LiftingApp() {
       if (user) {
         // Load from Firebase for authenticated users
         try {
+          console.log('Loading cycles data...');
           const cyclesRef = collection(db, "workouts", user.uid, "cycles")
           const cyclesSnapshot = await safeGetDocs(query(cyclesRef, orderBy("cycleNumber", "desc"), limit(1)))
           let latestCycle = 1
           
           if (!cyclesSnapshot.empty) {
-            latestCycle = cyclesSnapshot.docs[0].data().cycleNumber
+            const latestCycleData = cyclesSnapshot.docs[0].data()
+            latestCycle = latestCycleData.cycleNumber
+            
+            // If the latest cycle is completed, start a new one
+            if (latestCycleData.completedAt) {
+              console.log('Latest cycle is completed, starting new cycle');
+              latestCycle += 1
+              // Create new cycle record if it doesn't exist
+              await createDocumentFallback(
+                user.uid,
+                "workouts",
+                "cycles",
+                `cycle-${latestCycle}`,
+                {
+                  cycleNumber: latestCycle,
+                  startedAt: new Date(),
+                  status: 'active'
+                }
+              )
+            }
           }
+          console.log('Setting current cycle to:', latestCycle);
           setCurrentCycle(latestCycle)
 
           const workoutsRef = collection(db, "workouts", user.uid, "completed")
@@ -132,9 +153,12 @@ export default function LiftingApp() {
           if (!workoutsSnapshot.empty) {
             workoutsSnapshot.forEach((doc) => {
               const data = doc.data()
+              // Extract week and day from the workout ID (format: "Wk 1-Mon-1")
               const [week, day] = doc.id.split("-").slice(0, 2)
-              if (updatedProgram[week] && updatedProgram[week][day]) {
-                updatedProgram[week][day].completed = data.completedAt.toDate()
+              // Convert any "Week X" format to "Wk X" format
+              const normalizedWeek = week.replace("Week ", "Wk ")
+              if (updatedProgram[normalizedWeek] && updatedProgram[normalizedWeek][day]) {
+                updatedProgram[normalizedWeek][day].completed = data.completedAt.toDate()
               }
             })
           }
@@ -151,21 +175,21 @@ export default function LiftingApp() {
               Object.entries(weekData).forEach(([day, dayData]: [string, any]) => {
                 if (dayData.completed) {
                   const completionDate = new Date(dayData.completed)
-                          migratePromises.push(
-          createUserDocument(
-            user.uid,
-            "workouts",
-            "completed",
-            `${week}-${day}-${cycle}`,
-            {
-              week,
-              day,
-              workoutName: dayData.name,
-              completedAt: completionDate,
-              cycle: cycle
-            }
-          )
-        )
+                  migratePromises.push(
+                    createUserDocument(
+                      user.uid,
+                      "workouts",
+                      "completed",
+                      `${week}-${day}-${cycle}`,
+                      {
+                        week,
+                        day,
+                        workoutName: dayData.name,
+                        completedAt: completionDate,
+                        cycle: cycle
+                      }
+                    )
+                  )
                 }
               })
             })
@@ -253,12 +277,11 @@ export default function LiftingApp() {
     if (user) {
       // Save to Firebase for authenticated users
       try {
-
         await createDocumentFallback(
           user.uid,
           "workouts",
           "completed",
-          `${week}-${day}-${currentCycle}`,
+          `${week.replace("Week ", "Wk ")}-${day}-${currentCycle}`,
           {
             week,
             day,
@@ -288,8 +311,11 @@ export default function LiftingApp() {
     // If all workouts are completed, start a new cycle
     if (!nextWorkout) {
       if (user) {
-        // Save cycle completion to Firebase for authenticated users
         try {
+          console.log('Starting cycle transition...');
+          console.log('Current cycle:', currentCycle);
+          
+          // Save current cycle completion
           await createDocumentFallback(
             user.uid,
             "workouts",
@@ -300,28 +326,59 @@ export default function LiftingApp() {
               completedAt: completionDate
             }
           )
+          console.log('Saved cycle completion');
+
+          // Start new cycle
+          const newCycle = currentCycle + 1
+          console.log('New cycle will be:', newCycle);
+          
+          // Save the new cycle number to Firebase first
+          const newCycleRef = await createDocumentFallback(
+            user.uid,
+            "workouts",
+            "cycles",
+            `cycle-${newCycle}`,
+            {
+              cycleNumber: newCycle,
+              startedAt: new Date(),
+              status: 'active'
+            }
+          )
+          console.log('Created new cycle record');
+
+          // Then update local state
+          setCurrentCycle(newCycle)
+          const newProgram = { ...initialProgram }
+          setProgram(newProgram)
+          console.log('Updated local state');
+
+          const firstWorkout = { week: "Wk 1", day: "Mon" }
+          setActiveWorkout(firstWorkout)
+          setSelectedWorkout(firstWorkout)
+          console.log('Set first workout as active')
+
         } catch (error) {
-          console.error("Error saving cycle completion:", error)
+          console.error("Error transitioning to new cycle:", error)
+          // If there's an error, reload the page to get the latest state from Firebase
+          window.location.reload()
+          return
         }
-      }
+      } else {
+        // For anonymous users, just update local storage
+        const newCycle = currentCycle + 1
+        setCurrentCycle(newCycle)
+        const newProgram = { ...initialProgram }
+        setProgram(newProgram)
 
-      // Start new cycle
-      const newCycle = currentCycle + 1
-      setCurrentCycle(newCycle)
-      const newProgram = { ...initialProgram }
-      setProgram(newProgram)
-
-      // Update local storage for anonymous users
-      if (!user) {
         localStorage.setItem('workoutProgress', JSON.stringify({
           program: newProgram,
           cycle: newCycle
         }))
-      }
 
-      const firstWorkout = { week: "Wk 1", day: "Mon" }
-      setActiveWorkout(firstWorkout)
-      setSelectedWorkout(firstWorkout)
+        const firstWorkout = { week: "Wk 1", day: "Mon" }
+        setActiveWorkout(firstWorkout)
+        setSelectedWorkout(firstWorkout)
+      }
     } else {
       setActiveWorkout(nextWorkout)
       setSelectedWorkout(nextWorkout)
@@ -418,8 +475,6 @@ export default function LiftingApp() {
         </div>
         <UserNav />
       </div>
-
-
 
       {/* Program Summary Table */}
       <div className="overflow-x-auto mb-8 p-0.5">
@@ -644,4 +699,3 @@ function generateExercises(workoutType: string): Exercise[] {
 
   return exercises[workoutType] || []
 }
-

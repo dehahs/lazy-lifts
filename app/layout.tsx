@@ -44,7 +44,3 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
     </html>
   )
 }
-
-
-
-import './globals.css'
