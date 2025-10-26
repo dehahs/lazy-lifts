@@ -19,11 +19,18 @@ export function UserNav() {
 
   return (
     <div className="flex items-center gap-4">
-      <Link href="/about">
-        <Button variant="ghost" className="text-base font-medium">
-          What is this?
-        </Button>
-      </Link>
+      <div className="flex gap-2">
+        <Link href="/about">
+          <Button variant="ghost" className="text-base font-medium">
+            What is this?
+          </Button>
+        </Link>
+        <Link href="/stats">
+          <Button variant="ghost" className="text-base font-medium">
+            Stats
+          </Button>
+        </Link>
+      </div>
       
       {!user ? (
         <Button onClick={() => signInWithGoogle()} variant="outline">
