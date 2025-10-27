@@ -18,16 +18,27 @@ type WeightEntry = {
   date: Date
 }
 
+type CalorieEntry = {
+  id: string
+  calories: number
+  date: Date
+}
+
 export default function StatsPage() {
   const { user } = useAuth()
   const [weight, setWeight] = useState("")
   const [weightEntries, setWeightEntries] = useState<WeightEntry[]>([])
-  const [editingEntry, setEditingEntry] = useState<WeightEntry | null>(null)
+  const [editingWeightEntry, setEditingWeightEntry] = useState<WeightEntry | null>(null)
+  
+  const [calories, setCalories] = useState("")
+  const [calorieEntries, setCalorieEntries] = useState<CalorieEntry[]>([])
+  const [editingCalorieEntry, setEditingCalorieEntry] = useState<CalorieEntry | null>(null)
 
   // Load weight entries
   useEffect(() => {
     if (!user) return
     loadWeightEntries()
+    loadCalorieEntries()
   }, [user])
 
   const loadWeightEntries = async () => {
@@ -81,16 +92,80 @@ export default function StatsPage() {
     }
   }
 
-  const handleUpdateEntry = async () => {
-    if (!user || !editingEntry) return
+  const handleUpdateWeightEntry = async () => {
+    if (!user || !editingWeightEntry) return
     try {
-      await updateDoc(doc(db, "weights", user.uid, "entries", editingEntry.id), {
-        weight: editingEntry.weight
+      await updateDoc(doc(db, "weights", user.uid, "entries", editingWeightEntry.id), {
+        weight: editingWeightEntry.weight
       })
-      setEditingEntry(null)
+      setEditingWeightEntry(null)
       loadWeightEntries()
     } catch (error) {
       console.error("Error updating weight entry:", error)
+    }
+  }
+
+  const loadCalorieEntries = async () => {
+    if (!user) return
+    try {
+      const caloriesRef = collection(db, "calories", user.uid, "entries")
+      const q = query(caloriesRef, orderBy("date", "desc"))
+      const snapshot = await safeGetDocs(q)
+      const entries = snapshot.docs.map(doc => {
+        const data = doc.data() as { calories: number; date: { toDate: () => Date } }
+        return {
+          id: doc.id,
+          calories: data.calories,
+          date: data.date.toDate()
+        }
+      })
+      setCalorieEntries(entries)
+    } catch (error) {
+      console.error("Error loading calorie entries:", error)
+    }
+  }
+
+  const handleAddCalories = async () => {
+    if (!user || !calories) return
+    try {
+      const calorieId = `calorie-${Date.now()}`
+      await createUserDocument(
+        user.uid,
+        "calories",
+        "entries",
+        calorieId,
+        {
+          calories: parseFloat(calories),
+          date: new Date()
+        }
+      )
+      setCalories("")
+      loadCalorieEntries()
+    } catch (error) {
+      console.error("Error adding calorie entry:", error)
+    }
+  }
+
+  const handleDeleteCalorieEntry = async (entryId: string) => {
+    if (!user) return
+    try {
+      await deleteDoc(doc(db, "calories", user.uid, "entries", entryId))
+      loadCalorieEntries()
+    } catch (error) {
+      console.error("Error deleting calorie entry:", error)
+    }
+  }
+
+  const handleUpdateCalorieEntry = async () => {
+    if (!user || !editingCalorieEntry) return
+    try {
+      await updateDoc(doc(db, "calories", user.uid, "entries", editingCalorieEntry.id), {
+        calories: editingCalorieEntry.calories
+      })
+      setEditingCalorieEntry(null)
+      loadCalorieEntries()
+    } catch (error) {
+      console.error("Error updating calorie entry:", error)
     }
   }
 
@@ -103,9 +178,43 @@ export default function StatsPage() {
         label: 'Weight',
         data: [...weightEntries].reverse().map(entry => entry.weight),
         borderColor: 'rgb(75, 192, 192)',
-        tension: 0.1
+        tension: 0.1,
+        yAxisID: 'y'
+      },
+      {
+        label: 'Daily Calories',
+        data: [...calorieEntries].reverse().map(entry => entry.calories),
+        borderColor: 'rgb(255, 99, 132)',
+        tension: 0.1,
+        yAxisID: 'y1'
       }
     ]
+  }
+
+  const chartOptions = {
+    scales: {
+      y: {
+        type: 'linear' as const,
+        display: true,
+        position: 'left' as const,
+        title: {
+          display: true,
+          text: 'Weight (lbs)'
+        }
+      },
+      y1: {
+        type: 'linear' as const,
+        display: true,
+        position: 'right' as const,
+        title: {
+          display: true,
+          text: 'Daily Calories'
+        },
+        grid: {
+          drawOnChartArea: false
+        }
+      }
+    }
   }
 
   return (
@@ -122,27 +231,40 @@ export default function StatsPage() {
       {user ? (
         <>
           <Card className="p-6 mb-8">
-            <h2 className="text-2xl font-semibold mb-4">Track Your Weight</h2>
-            <div className="flex gap-4">
-              <Input
-                type="number"
-                placeholder="Enter weight"
-                value={weight}
-                onChange={(e) => setWeight(e.target.value)}
-                className="max-w-[200px]"
-              />
-              <Button onClick={handleAddWeight}>Add Entry</Button>
+            <h2 className="text-2xl font-semibold mb-4">Track Your Stats</h2>
+            <div className="flex gap-4 flex-wrap">
+              <div className="flex gap-4">
+                <Input
+                  type="number"
+                  placeholder="Enter weight"
+                  value={weight}
+                  onChange={(e) => setWeight(e.target.value)}
+                  className="max-w-[200px]"
+                />
+                <Button onClick={handleAddWeight}>Add Weight</Button>
+              </div>
+              <div className="flex gap-4">
+                <Input
+                  type="number"
+                  placeholder="Enter daily calories"
+                  value={calories}
+                  onChange={(e) => setCalories(e.target.value)}
+                  className="max-w-[200px]"
+                />
+                <Button onClick={handleAddCalories}>Add Calories</Button>
+              </div>
             </div>
           </Card>
 
           {weightEntries.length > 0 && (
             <>
+
               <Card className="p-6 mb-8">
-                <h2 className="text-2xl font-semibold mb-4">Weight Trend</h2>
-                <Chart type="line" data={chartData} />
+                <h2 className="text-2xl font-semibold mb-4">Weight and Calorie Trends</h2>
+                <Chart type="line" data={chartData} options={chartOptions} />
               </Card>
 
-              <Card className="p-6">
+              <Card className="p-6 mb-8">
                 <h2 className="text-2xl font-semibold mb-4">Weight History</h2>
                 <Table>
                   <TableHeader>
@@ -157,12 +279,12 @@ export default function StatsPage() {
                       <TableRow key={entry.id}>
                         <TableCell>{entry.date.toLocaleString()}</TableCell>
                         <TableCell>
-                          {editingEntry?.id === entry.id ? (
+                          {editingWeightEntry?.id === entry.id ? (
                             <Input
                               type="number"
-                              value={editingEntry.weight}
-                              onChange={(e) => setEditingEntry({
-                                ...editingEntry,
+                              value={editingWeightEntry.weight}
+                              onChange={(e) => setEditingWeightEntry({
+                                ...editingWeightEntry,
                                 weight: parseFloat(e.target.value)
                               })}
                               className="max-w-[100px]"
@@ -172,18 +294,18 @@ export default function StatsPage() {
                           )}
                         </TableCell>
                         <TableCell className="text-right">
-                          {editingEntry?.id === entry.id ? (
+                          {editingWeightEntry?.id === entry.id ? (
                             <div className="flex gap-2 justify-end">
                               <Button
                                 variant="outline"
                                 size="sm"
-                                onClick={() => setEditingEntry(null)}
+                                onClick={() => setEditingWeightEntry(null)}
                               >
                                 Cancel
                               </Button>
                               <Button
                                 size="sm"
-                                onClick={handleUpdateEntry}
+                                onClick={handleUpdateWeightEntry}
                               >
                                 Save
                               </Button>
@@ -193,7 +315,7 @@ export default function StatsPage() {
                               <Button
                                 variant="outline"
                                 size="sm"
-                                onClick={() => setEditingEntry(entry)}
+                                onClick={() => setEditingWeightEntry(entry)}
                               >
                                 Edit
                               </Button>
@@ -201,6 +323,77 @@ export default function StatsPage() {
                                 variant="destructive"
                                 size="sm"
                                 onClick={() => handleDeleteEntry(entry.id)}
+                              >
+                                Delete
+                              </Button>
+                            </div>
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </Card>
+
+              <Card className="p-6">
+                <h2 className="text-2xl font-semibold mb-4">Calorie History</h2>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Date</TableHead>
+                      <TableHead>Calories</TableHead>
+                      <TableHead className="text-right">Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {calorieEntries.map((entry) => (
+                      <TableRow key={entry.id}>
+                        <TableCell>{entry.date.toLocaleString()}</TableCell>
+                        <TableCell>
+                          {editingCalorieEntry?.id === entry.id ? (
+                            <Input
+                              type="number"
+                              value={editingCalorieEntry.calories}
+                              onChange={(e) => setEditingCalorieEntry({
+                                ...editingCalorieEntry,
+                                calories: parseFloat(e.target.value)
+                              })}
+                              className="max-w-[100px]"
+                            />
+                          ) : (
+                            entry.calories
+                          )}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          {editingCalorieEntry?.id === entry.id ? (
+                            <div className="flex gap-2 justify-end">
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => setEditingCalorieEntry(null)}
+                              >
+                                Cancel
+                              </Button>
+                              <Button
+                                size="sm"
+                                onClick={handleUpdateCalorieEntry}
+                              >
+                                Save
+                              </Button>
+                            </div>
+                          ) : (
+                            <div className="flex gap-2 justify-end">
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => setEditingCalorieEntry(entry)}
+                              >
+                                Edit
+                              </Button>
+                              <Button
+                                variant="destructive"
+                                size="sm"
+                                onClick={() => handleDeleteCalorieEntry(entry.id)}
                               >
                                 Delete
                               </Button>
