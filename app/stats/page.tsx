@@ -7,8 +7,9 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Card } from "@/components/ui/card"
 import { UserNav } from "@/components/user-nav"
 import { useAuth } from "@/contexts/auth-context"
-import { db, createUserDocument, safeGetDocs } from "@/lib/firebase"
+import { db, createUserDocument, safeGetDocs, subscribeToMeals } from "@/lib/firebase"
 import { collection, getDocs, query, orderBy, deleteDoc, doc, updateDoc } from "firebase/firestore"
+import { startOfDay, isSameDay } from "date-fns"
 import Link from "next/link"
 import { Chart } from "@/components/ui/chart"
 
@@ -24,6 +25,21 @@ type CalorieEntry = {
   date: Date
 }
 
+type MealEntry = {
+  id: string
+  timestamp: Date
+  calories: number
+  description: string
+  protein: number
+  carbs: number
+  fat: number
+}
+
+type DailyCalories = {
+  date: Date
+  totalCalories: number
+}
+
 export default function StatsPage() {
   const { user } = useAuth()
   const [weight, setWeight] = useState("")
@@ -33,13 +49,51 @@ export default function StatsPage() {
   const [calories, setCalories] = useState("")
   const [calorieEntries, setCalorieEntries] = useState<CalorieEntry[]>([])
   const [editingCalorieEntry, setEditingCalorieEntry] = useState<CalorieEntry | null>(null)
+  const [mealEntries, setMealEntries] = useState<MealEntry[]>([])
+  const [dailyCalories, setDailyCalories] = useState<DailyCalories[]>([])
 
   // Load weight entries
   useEffect(() => {
     if (!user) return
     loadWeightEntries()
     loadCalorieEntries()
+
+    // Subscribe to meals
+    const unsubscribe = subscribeToMeals(user.uid, (meals) => {
+      setMealEntries(meals.map(meal => ({
+        id: meal.id,
+        timestamp: meal.timestamp,
+        description: meal.description,
+        calories: meal.calories,
+        protein: meal.protein,
+        carbs: meal.carbs,
+        fat: meal.fat
+      })))
+    })
+
+    return () => unsubscribe()
   }, [user])
+
+  // Calculate daily calories from meals
+  useEffect(() => {
+    const dailyTotals = mealEntries.reduce<DailyCalories[]>((acc, meal) => {
+      const mealDate = startOfDay(meal.timestamp)
+      const existingDay = acc.find(day => isSameDay(day.date, mealDate))
+
+      if (existingDay) {
+        existingDay.totalCalories += meal.calories
+      } else {
+        acc.push({
+          date: mealDate,
+          totalCalories: meal.calories
+        })
+      }
+
+      return acc
+    }, [])
+
+    setDailyCalories(dailyTotals.sort((a, b) => b.date.getTime() - a.date.getTime()))
+  }, [mealEntries])
 
   const loadWeightEntries = async () => {
     if (!user) return
@@ -182,11 +236,24 @@ export default function StatsPage() {
         yAxisID: 'y'
       },
       {
-        label: 'Daily Calories',
+        label: 'Target Calories',
         data: [...calorieEntries].reverse().map(entry => entry.calories),
         borderColor: 'rgb(255, 99, 132)',
         tension: 0.1,
         yAxisID: 'y1'
+      },
+      {
+        label: 'Actual Calories',
+        data: [...weightEntries].reverse().map(entry => {
+          const matchingDay = dailyCalories.find(dc => 
+            isSameDay(dc.date, entry.date)
+          )
+          return matchingDay?.totalCalories || null
+        }),
+        borderColor: 'rgb(255, 159, 64)',
+        tension: 0.1,
+        yAxisID: 'y1',
+        borderDash: [5, 5]
       }
     ]
   }
@@ -246,7 +313,7 @@ export default function StatsPage() {
               <div className="flex gap-4">
                 <Input
                   type="number"
-                  placeholder="Enter daily calories"
+                  placeholder="Enter target calories"
                   value={calories}
                   onChange={(e) => setCalories(e.target.value)}
                   className="max-w-[200px]"

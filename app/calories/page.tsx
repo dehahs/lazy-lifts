@@ -338,7 +338,7 @@ export default function CaloriesPage() {
           variant={isListening ? "destructive" : "default"}
           disabled={!isOnline}
         >
-          {isListening ? "Listening..." : "Start Speaking"}
+          {isListening ? "Listening..." : "What did you eat?"}
         </Button>
 
         {(transcript || isAnalyzing) && (
@@ -462,7 +462,7 @@ export default function CaloriesPage() {
           </Accordion>
         )}
 
-        {/* Notes hidden
+        {/* Notes and debug info hidden
         <div className="text-sm text-muted-foreground text-center">
           <p>Note: Speech recognition requires an internet connection as it uses Google's speech services.</p>
           {process.env.NODE_ENV === 'development' && (
@@ -472,26 +472,23 @@ export default function CaloriesPage() {
             </p>
           )}
         </div>
-        */}
-        
-        {/* Debug Information */}
-        {debugInfo.length > 0 && (
-          <div className="mt-4 p-4 bg-slate-100 rounded-lg text-left">
-            <div className="flex justify-between items-center mb-2">
-              <p className="font-medium">Debug Information:</p>
-              <Button 
-                onClick={() => setDebugInfo([])} 
-                variant="outline" 
-                size="sm"
-              >
-                Clear
-              </Button>
-            </div>
-            {debugInfo.map((info, index) => (
-              <p key={index} className="text-xs font-mono whitespace-pre-wrap">{info}</p>
-            ))}
+
+        <div className="mt-4 p-4 bg-slate-100 rounded-lg text-left">
+          <div className="flex justify-between items-center mb-2">
+            <p className="font-medium">Debug Information:</p>
+            <Button 
+              onClick={() => setDebugInfo([])} 
+              variant="outline" 
+              size="sm"
+            >
+              Clear
+            </Button>
           </div>
-        )}
+          {debugInfo.map((info, index) => (
+            <p key={index} className="text-xs font-mono whitespace-pre-wrap">{info}</p>
+          ))}
+        </div>
+        */}
       </div>
     </div>
   )
