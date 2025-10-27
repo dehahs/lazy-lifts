@@ -43,19 +43,38 @@ interface DailyTotal {
   totalFat: number
 }
 
-function groupEntriesByDay(entries: FoodEntry[]): DailyTotal[] {
-  const groupedEntries = entries.reduce((acc: { [key: string]: FoodEntry[] }, entry) => {
-    const dateKey = startOfDay(entry.timestamp).toISOString();
-    if (!acc[dateKey]) {
-      acc[dateKey] = [];
+interface YearGroup {
+  year: number;
+  dailyTotals: DailyTotal[];
+}
+
+function groupEntriesByDay(entries: FoodEntry[]): YearGroup[] {
+  // First group by year
+  const groupedByYear = entries.reduce((yearAcc: { [year: number]: FoodEntry[] }, entry) => {
+    const year = entry.timestamp.getFullYear();
+    if (!yearAcc[year]) {
+      yearAcc[year] = [];
     }
-    acc[dateKey].push(entry);
-    return acc;
+    yearAcc[year].push(entry);
+    return yearAcc;
   }, {});
 
-  return Object.entries(groupedEntries)
-    .map(([dateStr, entries]) => {
-      const totals = entries.reduce(
+  // Then for each year, group by day
+  return Object.entries(groupedByYear)
+    .map(([year, yearEntries]) => {
+      const groupedEntries = yearEntries.reduce((acc: { [key: string]: FoodEntry[] }, entry) => {
+        const dateKey = startOfDay(entry.timestamp).toISOString();
+        if (!acc[dateKey]) {
+          acc[dateKey] = [];
+        }
+        acc[dateKey].push(entry);
+        return acc;
+      }, {});
+
+      const dailyTotals = Object.entries(groupedEntries)
+        .map(([dateStr, entries]) => {
+      // First sum all values
+      const rawTotals = entries.reduce(
         (sum, entry) => ({
           calories: sum.calories + entry.calories,
           protein: sum.protein + entry.protein,
@@ -64,17 +83,32 @@ function groupEntriesByDay(entries: FoodEntry[]): DailyTotal[] {
         }),
         { calories: 0, protein: 0, carbs: 0, fat: 0 }
       );
+      
+      // Then round the final totals
+      const totals = {
+        calories: Number(rawTotals.calories.toFixed(1)),
+        protein: Number(rawTotals.protein.toFixed(1)),
+        carbs: Number(rawTotals.carbs.toFixed(1)),
+        fat: Number(rawTotals.fat.toFixed(1))
+      };
+
+          return {
+            date: new Date(dateStr),
+            entries: entries.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime()),
+            totalCalories: Number(totals.calories.toFixed(1)),
+            totalProtein: Number(totals.protein.toFixed(1)),
+            totalCarbs: Number(totals.carbs.toFixed(1)),
+            totalFat: Number(totals.fat.toFixed(1)),
+          };
+        })
+        .sort((a, b) => b.date.getTime() - a.date.getTime());
 
       return {
-        date: new Date(dateStr),
-        entries: entries.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime()),
-        totalCalories: totals.calories,
-        totalProtein: totals.protein,
-        totalCarbs: totals.carbs,
-        totalFat: totals.fat,
+        year: parseInt(year),
+        dailyTotals
       };
     })
-    .sort((a, b) => b.date.getTime() - a.date.getTime());
+    .sort((a, b) => b.year - a.year);
 }
 
 export default function CaloriesPage() {
@@ -112,10 +146,10 @@ export default function CaloriesPage() {
         id: meal.id,
         timestamp: meal.timestamp,
         description: meal.description,
-        calories: meal.calories,
-        protein: meal.protein,
-        carbs: meal.carbs,
-        fat: meal.fat
+        calories: Number(meal.calories.toFixed(1)),
+        protein: Number(meal.protein.toFixed(1)),
+        carbs: Number(meal.carbs.toFixed(1)),
+        fat: Number(meal.fat.toFixed(1))
       })))
     })
 
@@ -251,10 +285,10 @@ export default function CaloriesPage() {
         id: mealId || Date.now().toString(),
         timestamp: originalEntry ? originalEntry.timestamp : new Date(),
         description: description,
-        calories: data.calories,
-        protein: data.protein,
-        carbs: data.carbs,
-        fat: data.fat,
+        calories: Number(data.calories.toFixed(1)),
+        protein: Number(data.protein.toFixed(1)),
+        carbs: Number(data.carbs.toFixed(1)),
+        fat: Number(data.fat.toFixed(1)),
       };
 
       addDebugInfo(`Saving meal with ID: ${newEntry.id}, editing: ${!!mealId}`);
@@ -349,24 +383,26 @@ export default function CaloriesPage() {
         )}
 
         {foodEntries.length > 0 && (
-          <Accordion 
-            type="multiple" 
-            className="w-full"
-            defaultValue={[startOfDay(new Date()).toISOString()]}
-          >
-            {groupEntriesByDay(foodEntries).map((dailyTotal) => (
-              <AccordionItem key={dailyTotal.date.toISOString()} value={dailyTotal.date.toISOString()}>
+          <div className="space-y-6">
+            {groupEntriesByDay(foodEntries).map((yearGroup) => (
+              <div key={yearGroup.year}>
+                <h3 className="text-xl font-medium text-muted-foreground mb-4">{yearGroup.year}</h3>
+                <Accordion 
+                  type="multiple" 
+                  className="w-full"
+                  defaultValue={[startOfDay(new Date()).toISOString()]}
+                >
+                  {yearGroup.dailyTotals.map((dailyTotal) => (
+                    <AccordionItem key={dailyTotal.date.toISOString()} value={dailyTotal.date.toISOString()}>
                 <AccordionTrigger className="px-4">
-                  <div className="flex w-full items-center justify-between">
-                    <span className="font-medium">
-                      {format(dailyTotal.date, 'EEEE, MMMM d, yyyy')}
+                  <div className="flex w-full items-center gap-6">
+                    <span className="font-medium min-w-[120px]">
+                      {format(dailyTotal.date, 'EEE, MMM d')}
                     </span>
-                    <div className="flex gap-6 text-sm">
-                      <span>{dailyTotal.totalProtein}g protein</span>
-                      <span>{dailyTotal.totalCarbs}g carbs</span>
-                      <span>{dailyTotal.totalFat}g fat</span>
-                      <span className="font-semibold">{dailyTotal.totalCalories} cal</span>
-                    </div>
+                    <span className="text-sm">{Number(dailyTotal.totalProtein.toFixed(1))}g protein</span>
+                    <span className="text-sm">{Number(dailyTotal.totalCarbs.toFixed(1))}g carbs</span>
+                    <span className="text-sm">{Number(dailyTotal.totalFat.toFixed(1))}g fat</span>
+                    <span className="text-sm font-semibold">{Number(dailyTotal.totalCalories.toFixed(1))} cal</span>
                   </div>
                 </AccordionTrigger>
                 <AccordionContent>
@@ -442,10 +478,10 @@ export default function CaloriesPage() {
                                 entry.description
                               )}
                             </TableCell>
-                            <TableCell className="text-right">{entry.protein}g</TableCell>
-                            <TableCell className="text-right">{entry.carbs}g</TableCell>
-                            <TableCell className="text-right">{entry.fat}g</TableCell>
-                            <TableCell className="text-right font-semibold">{entry.calories}</TableCell>
+                            <TableCell className="text-right">{Number(entry.protein.toFixed(1))}g</TableCell>
+                            <TableCell className="text-right">{Number(entry.carbs.toFixed(1))}g</TableCell>
+                            <TableCell className="text-right">{Number(entry.fat.toFixed(1))}g</TableCell>
+                            <TableCell className="text-right font-semibold">{Number(entry.calories.toFixed(1))}</TableCell>
                           </TableRow>
                         ))}
                       </TableBody>
@@ -454,7 +490,10 @@ export default function CaloriesPage() {
                 </AccordionContent>
               </AccordionItem>
             ))}
-          </Accordion>
+                  </Accordion>
+              </div>
+            ))}
+          </div>
         )}
 
         {/* Notes and debug info hidden

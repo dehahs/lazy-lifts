@@ -230,14 +230,14 @@ export default function StatsPage() {
     datasets: [
       {
         label: 'Weight',
-        data: [...weightEntries].reverse().map(entry => entry.weight),
+        data: [...weightEntries].reverse().map(entry => Number(entry.weight.toFixed(1))),
         borderColor: 'rgb(75, 192, 192)',
         tension: 0.1,
         yAxisID: 'y'
       },
       {
         label: 'Target Calories',
-        data: [...calorieEntries].reverse().map(entry => entry.calories),
+        data: [...calorieEntries].reverse().map(entry => Number(entry.calories.toFixed(1))),
         borderColor: 'rgb(255, 99, 132)',
         tension: 0.1,
         yAxisID: 'y1'
@@ -248,7 +248,7 @@ export default function StatsPage() {
           const matchingDay = dailyCalories.find(dc => 
             isSameDay(dc.date, entry.date)
           )
-          return matchingDay?.totalCalories || null
+          return matchingDay ? Number(matchingDay.totalCalories.toFixed(1)) : null
         }),
         borderColor: 'rgb(255, 159, 64)',
         tension: 0.1,
@@ -357,7 +357,7 @@ export default function StatsPage() {
                               className="max-w-[100px]"
                             />
                           ) : (
-                            entry.weight
+                            Number(entry.weight.toFixed(1))
                           )}
                         </TableCell>
                         <TableCell className="text-right">
@@ -428,7 +428,7 @@ export default function StatsPage() {
                               className="max-w-[100px]"
                             />
                           ) : (
-                            entry.calories
+                            Number(entry.calories.toFixed(1))
                           )}
                         </TableCell>
                         <TableCell className="text-right">
