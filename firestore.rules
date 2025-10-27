@@ -1,0 +1,55 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Helper functions
+    function isSignedIn() {
+      return request.auth != null;
+    }
+    
+    function isOwner(data) {
+      return isSignedIn() && data.ownerUid == request.auth.uid;
+    }
+
+    function isAuthorized(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    // User data structure with meals
+    match /users/{userId} {
+      // Allow users to read and write their own data
+      allow read, write: if isAuthorized(userId);
+      
+      // Meals collection under user document
+      match /meals/{mealId} {
+        allow read: if isAuthorized(userId);
+        allow create: if isAuthorized(userId)
+          && request.resource.data.ownerUid == userId;
+        allow update, delete: if isAuthorized(userId)
+          && resource.data.ownerUid == userId;
+      }
+    }
+
+    // Allow users to access their own workout data
+    match /workouts/{userId}/{document=**} {
+      allow read, write: if isAuthorized(userId);
+    }
+
+    // Allow users to access their own weight data
+    match /weights/{userId}/entries/{entryId} {
+      allow read, write: if isAuthorized(userId);
+    }
+
+    // Allow users to access their own calories data
+    match /calories/{userId}/entries/{entryId} {
+      allow read, write: if isAuthorized(userId);
+    }
+
+    // Allow access to other collections with ownerUid check
+    match /{document=**} {
+      allow read, write: if
+          isSignedIn() &&
+          (resource == null || request.auth.uid == resource.data.ownerUid);
+    }
+  }
+}

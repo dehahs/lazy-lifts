@@ -1,6 +1,19 @@
 import { initializeApp } from "firebase/app"
 import { getAuth } from "firebase/auth"
-import { getFirestore, doc, setDoc, DocumentData, getDocs } from "firebase/firestore"
+import { 
+  getFirestore, 
+  doc, 
+  setDoc, 
+  DocumentData, 
+  getDocs,
+  collection,
+  query,
+  where,
+  orderBy,
+  onSnapshot,
+  Timestamp,
+  deleteDoc
+} from "firebase/firestore"
 
 const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
@@ -83,9 +96,60 @@ export const safeGetDocs = async (collectionRef: any) => {
   }
 }
 
+// Meal-specific functions
+export interface MealEntry {
+  id: string
+  timestamp: Date
+  description: string
+  calories: number
+  protein: number
+  carbs: number
+  fat: number
+  ownerUid: string
+}
 
+export const saveMeal = async (userId: string, meal: Omit<MealEntry, 'ownerUid'>) => {
+  return await createUserDocument(
+    userId,
+    'users',
+    'meals',
+    meal.id,
+    {
+      ...meal,
+      timestamp: Timestamp.fromDate(meal.timestamp)
+    }
+  )
+}
 
+export const getMeals = async (userId: string) => {
+  const mealsRef = collection(db, 'users', userId, 'meals')
+  const q = query(mealsRef, orderBy('timestamp', 'desc'))
+  const snapshot = await getDocs(q)
+  
+  return snapshot.docs.map(doc => ({
+    ...doc.data(),
+    id: doc.id,
+    timestamp: doc.data().timestamp.toDate()
+  })) as MealEntry[]
+}
 
+export const subscribeToMeals = (userId: string, callback: (meals: MealEntry[]) => void) => {
+  const mealsRef = collection(db, 'users', userId, 'meals')
+  const q = query(mealsRef, orderBy('timestamp', 'desc'))
+  
+  return onSnapshot(q, (snapshot) => {
+    const meals = snapshot.docs.map(doc => ({
+      ...doc.data(),
+      id: doc.id,
+      timestamp: doc.data().timestamp.toDate()
+    })) as MealEntry[]
+    callback(meals)
+  })
+}
 
+export const deleteMeal = async (userId: string, mealId: string) => {
+  const mealRef = doc(db, 'users', userId, 'meals', mealId)
+  await deleteDoc(mealRef)
+}
 
 
