@@ -5,6 +5,7 @@ import { useAuth } from "@/contexts/auth-context"
 import { saveMeal, subscribeToMeals, deleteMeal, MealEntry as FirestoreMealEntry } from "@/lib/firebase"
 import { Button } from "@/components/ui/button"
 import { UserNav } from "@/components/user-nav"
+import { StickyActionButton } from "@/components/ui/sticky-action-button"
 import Link from "next/link"
 import { Pencil, Trash2, X, Check } from "lucide-react"
 import {
@@ -312,34 +313,28 @@ export default function CaloriesPage() {
   }
 
   return (
-    <div className="container mx-auto py-8 px-4 max-w-3xl">
-      <div className="flex justify-between items-start mb-8">
-        <div>
-          <Link href="/" className="hover:opacity-80 transition-opacity">
-            <h1 className="text-5xl font-medium tracking-wide">Lazy Lifts</h1>
-          </Link>
+    <>
+      <div className="container mx-auto py-8 px-4 max-w-3xl pb-32">
+        <div className="flex justify-between items-start mb-8">
+          <div>
+            <Link href="/" className="hover:opacity-80 transition-opacity">
+              <h1 className="text-5xl font-medium tracking-wide">Lazy Lifts</h1>
+            </Link>
+          </div>
+          <UserNav />
         </div>
-        <UserNav />
-      </div>
 
-      <div className="mt-8 space-y-6">
-        {/* Online status indicator hidden
-        <div className="flex items-center gap-2 justify-center">
-          <div className={`w-3 h-3 rounded-full ${isOnline ? 'bg-green-500' : 'bg-red-500'}`} />
-          <p className="text-sm text-muted-foreground">
-            {isOnline ? 'Connected to speech services' : 'Offline - Speech recognition unavailable'}
-          </p>
-        </div>
-        */}
+        <div className="mt-8 space-y-6">
+          {/* Online status indicator hidden
+          <div className="flex items-center gap-2 justify-center">
+            <div className={`w-3 h-3 rounded-full ${isOnline ? 'bg-green-500' : 'bg-red-500'}`} />
+            <p className="text-sm text-muted-foreground">
+              {isOnline ? 'Connected to speech services' : 'Offline - Speech recognition unavailable'}
+            </p>
+          </div>
+          */}
 
-        <Button 
-          onClick={() => startListening()}
-          className="w-full py-8 text-lg"
-          variant={isListening ? "destructive" : "default"}
-          disabled={!isOnline}
-        >
-          {isListening ? "Listening..." : "What did you eat?"}
-        </Button>
+          {/* Main button moved to fixed bottom */}
 
         {(transcript || isAnalyzing) && (
           <div className="p-4 rounded-lg border bg-card text-card-foreground">
@@ -490,6 +485,15 @@ export default function CaloriesPage() {
         </div>
         */}
       </div>
-    </div>
+      </div>
+
+      <StickyActionButton
+        onClick={() => startListening()}
+        variant={isListening ? "destructive" : "default"}
+        disabled={!isOnline}
+      >
+        {isListening ? "Listening..." : "What did you eat?"}
+      </StickyActionButton>
+    </>
   )
 }

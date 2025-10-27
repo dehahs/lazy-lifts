@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { StickyActionButton } from "@/components/ui/sticky-action-button"
 import { cn } from "@/lib/utils"
 import { UserNav } from "@/components/user-nav"
 import { useAuth } from "@/contexts/auth-context"
@@ -496,16 +497,17 @@ export default function LiftingApp() {
   }
 
   return (
-    <div className="container mx-auto py-8 px-4 max-w-3xl">
-      <div className="flex justify-between items-start mb-8">
-        <div>
-          <Link href="/" className="hover:opacity-80 transition-opacity">
-            <h1 className="text-5xl font-medium tracking-wide">Lazy Lifts</h1>
-            <p className="text-muted-foreground mt-1 text-lg tracking-wide">Cycle {currentCycle}</p>
-          </Link>
+    <>
+      <div className="container mx-auto py-8 px-4 max-w-3xl pb-32">
+        <div className="flex justify-between items-start mb-8">
+          <div>
+            <Link href="/" className="hover:opacity-80 transition-opacity">
+              <h1 className="text-5xl font-medium tracking-wide">Lazy Lifts</h1>
+              <p className="text-muted-foreground mt-1 text-lg tracking-wide">Cycle {currentCycle}</p>
+            </Link>
+          </div>
+          <UserNav />
         </div>
-        <UserNav />
-      </div>
 
       {/* Program Summary Table */}
       <div className="overflow-x-auto mb-8 p-0.5">
@@ -586,16 +588,6 @@ export default function LiftingApp() {
                 </div>
               )}
 
-              {/* Log Workout Button - only for active workout */}
-              {isActiveWorkout() && !getSelectedWorkoutDetails()?.completed && (
-                <Button
-                  className="w-full mt-8 bg-red-500 hover:bg-red-600 text-white py-4"
-                  onClick={handleLogWorkout}
-                >
-                  Did you even lift?
-                </Button>
-              )}
-              
               {/* Go to latest workout button - visible when not on active workout */}
               {!isActiveWorkout() && activeWorkout && (
                 <Button
@@ -621,7 +613,18 @@ export default function LiftingApp() {
           )}
         </div>
       )}
-    </div>
+      </div>
+
+      {/* Fixed button at the bottom */}
+      {isActiveWorkout() && !getSelectedWorkoutDetails()?.completed && (
+        <StickyActionButton
+          onClick={handleLogWorkout}
+          variant="destructive"
+        >
+          Did you even lift?
+        </StickyActionButton>
+      )}
+    </>
   )
 }
 
