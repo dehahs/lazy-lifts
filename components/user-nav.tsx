@@ -20,21 +20,23 @@ export function UserNav() {
   return (
     <div className="flex items-center gap-4">
       <div className="flex gap-2">
-        <Link href="/about">
+        <Link href="/">
           <Button variant="ghost" className="text-base font-medium">
-            What is this?
-          </Button>
-        </Link>
-        <Link href="/stats">
-          <Button variant="ghost" className="text-base font-medium">
-            Stats
+            Lift
           </Button>
         </Link>
         <Link href="/calories">
           <Button variant="ghost" className="text-base font-medium">
-            Calories
+            Eat
           </Button>
         </Link>
+        <div className="ml-auto">
+          <Link href="/stats">
+            <Button variant="ghost" className="text-base font-medium">
+              Stats
+            </Button>
+          </Link>
+        </div>
       </div>
       
       {!user ? (
