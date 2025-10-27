@@ -2,11 +2,11 @@
 
 import { useState, useEffect } from "react"
 import { useAuth } from "@/contexts/auth-context"
-import { saveMeal, subscribeToMeals, MealEntry as FirestoreMealEntry } from "@/lib/firebase"
+import { saveMeal, subscribeToMeals, deleteMeal, MealEntry as FirestoreMealEntry } from "@/lib/firebase"
 import { Button } from "@/components/ui/button"
 import { UserNav } from "@/components/user-nav"
 import Link from "next/link"
-import { Pencil } from "lucide-react"
+import { Pencil, Trash2, X, Check } from "lucide-react"
 import {
   Table,
   TableBody,
@@ -85,6 +85,21 @@ export default function CaloriesPage() {
   const [foodEntries, setFoodEntries] = useState<FoodEntry[]>([])
   const [error, setError] = useState<string | null>(null)
   const [editingMealId, setEditingMealId] = useState<string | null>(null)
+  const [deletingMealId, setDeletingMealId] = useState<string | null>(null)
+
+  const handleDeleteMeal = async (mealId: string) => {
+    if (!user) return;
+    try {
+      addDebugInfo(`Deleting meal: ${mealId}`);
+      await deleteMeal(user.uid, mealId);
+      addDebugInfo(`Successfully deleted meal: ${mealId}`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to delete meal');
+      addDebugInfo(`Error deleting meal: ${err}`);
+    } finally {
+      setDeletingMealId(null);
+    }
+  }
 
   // Subscribe to meals from Firestore
   useEffect(() => {
@@ -377,18 +392,50 @@ export default function CaloriesPage() {
                         {dailyTotal.entries.map((entry) => (
                           <TableRow key={entry.id}>
                             <TableCell>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-8 w-8"
-                                onClick={(e) => {
-                                  e.preventDefault();
-                                  startListening(entry.id);
-                                }}
-                                disabled={isListening || isAnalyzing}
-                              >
-                                <Pencil className="h-4 w-4" />
-                              </Button>
+                              <div className="flex items-center gap-1">
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-8 w-8"
+                                  onClick={(e) => {
+                                    e.preventDefault();
+                                    startListening(entry.id);
+                                  }}
+                                  disabled={isListening || isAnalyzing || deletingMealId === entry.id}
+                                >
+                                  <Pencil className="h-4 w-4" />
+                                </Button>
+                                {deletingMealId === entry.id ? (
+                                  <div className="flex flex-col gap-0.5">
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      className="h-4 w-8 text-green-600 hover:text-green-700"
+                                      onClick={() => handleDeleteMeal(entry.id)}
+                                    >
+                                      <Check className="h-3 w-3" />
+                                    </Button>
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      className="h-4 w-8 text-muted-foreground"
+                                      onClick={() => setDeletingMealId(null)}
+                                    >
+                                      <X className="h-3 w-3" />
+                                    </Button>
+                                  </div>
+                                ) : (
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-8 w-8 text-destructive hover:text-destructive/90"
+                                    onClick={() => setDeletingMealId(entry.id)}
+                                    disabled={isListening || isAnalyzing}
+                                  >
+                                    <Trash2 className="h-4 w-4" />
+                                  </Button>
+                                )}
+                              </div>
                             </TableCell>
                             <TableCell>{format(entry.timestamp, 'HH:mm')}</TableCell>
                             <TableCell className="w-full">
