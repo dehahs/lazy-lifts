@@ -109,16 +109,19 @@ export interface MealEntry {
 }
 
 export const saveMeal = async (userId: string, meal: Omit<MealEntry, 'ownerUid'>) => {
-  return await createUserDocument(
-    userId,
-    'users',
-    'meals',
-    meal.id,
-    {
-      ...meal,
-      timestamp: Timestamp.fromDate(meal.timestamp)
-    }
-  )
+  const mealRef = doc(db, 'users', userId, 'meals', meal.id)
+  const data = {
+    description: meal.description,
+    calories: meal.calories,
+    protein: meal.protein,
+    carbs: meal.carbs,
+    fat: meal.fat,
+    timestamp: Timestamp.fromDate(meal.timestamp),
+    ownerUid: userId,
+    id: meal.id
+  }
+  await setDoc(mealRef, data)
+  return mealRef
 }
 
 export const getMeals = async (userId: string) => {

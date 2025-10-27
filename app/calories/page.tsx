@@ -6,6 +6,7 @@ import { saveMeal, subscribeToMeals, MealEntry as FirestoreMealEntry } from "@/l
 import { Button } from "@/components/ui/button"
 import { UserNav } from "@/components/user-nav"
 import Link from "next/link"
+import { Pencil } from "lucide-react"
 import {
   Table,
   TableBody,
@@ -83,12 +84,14 @@ export default function CaloriesPage() {
   const [isAnalyzing, setIsAnalyzing] = useState(false)
   const [foodEntries, setFoodEntries] = useState<FoodEntry[]>([])
   const [error, setError] = useState<string | null>(null)
+  const [editingMealId, setEditingMealId] = useState<string | null>(null)
 
   // Subscribe to meals from Firestore
   useEffect(() => {
     if (!user) return
 
     const unsubscribe = subscribeToMeals(user.uid, (meals) => {
+      addDebugInfo(`Received ${meals.length} meals from Firestore`)
       setFoodEntries(meals.map(meal => ({
         id: meal.id,
         timestamp: meal.timestamp,
@@ -147,7 +150,10 @@ export default function CaloriesPage() {
     }
   }, [])
 
-  const startListening = () => {
+  const startListening = (mealId?: string) => {
+    const editId = mealId || null
+    addDebugInfo(`Starting to listen for ${editId ? 'edit of meal ' + editId : 'new meal'}`)
+    setEditingMealId(editId)
     if (!('webkitSpeechRecognition' in window)) {
       alert('Speech recognition is not supported in this browser. Please use Chrome.')
       return
@@ -158,9 +164,13 @@ export default function CaloriesPage() {
     recognition.continuous = false
     recognition.interimResults = false
     
+    // Store the meal ID directly on the recognition instance
+    const boundMealId = editId
+    
     // Add more configuration for debugging
     recognition.lang = 'en-US' // Explicitly set language
     addDebugInfo(`Speech recognition configured with language: ${recognition.lang}`)
+    addDebugInfo(`Bound meal ID: ${boundMealId || 'new'}`)
 
     recognition.onstart = () => {
       setIsListening(true)
@@ -168,12 +178,15 @@ export default function CaloriesPage() {
 
     recognition.onresult = async (event: any) => {
       const transcript = event.results[0][0].transcript
+      addDebugInfo(`Got transcript for meal ${boundMealId || 'new'}: ${transcript}`)
+      addDebugInfo(`Bound meal ID: ${boundMealId || 'new'}`)
+      
       setTranscript(transcript)
       setIsListening(false)
-      await analyzeFood(transcript)
+      await analyzeFood(transcript, boundMealId)
     }
 
-  const analyzeFood = async (description: string) => {
+  const analyzeFood = async (description: string, mealId: string | null = null) => {
     if (!user) {
       setError('Please sign in to log meals');
       return;
@@ -200,10 +213,27 @@ export default function CaloriesPage() {
 
       const data = await response.json();
       addDebugInfo(`Received analysis: ${JSON.stringify(data)}`);
+      addDebugInfo(`Processing meal with ID: ${mealId || 'new'}`);
       
+      // If editing, find the original entry to preserve its timestamp
+      const originalEntry = mealId 
+        ? foodEntries.find(entry => entry.id === mealId)
+        : null;
+
+      addDebugInfo(`Editing meal: ${mealId || 'new'}`)
+      if (mealId) {
+        addDebugInfo(`Original entry found: ${!!originalEntry}`)
+      }
+
+      if (!originalEntry && mealId) {
+        const error = 'Could not find original entry';
+        addDebugInfo(`Error: ${error}`);
+        throw new Error(error);
+      }
+
       const newEntry: Omit<FirestoreMealEntry, 'ownerUid'> = {
-        id: Date.now().toString(),
-        timestamp: new Date(),
+        id: mealId || Date.now().toString(),
+        timestamp: originalEntry ? originalEntry.timestamp : new Date(),
         description: description,
         calories: data.calories,
         protein: data.protein,
@@ -211,7 +241,10 @@ export default function CaloriesPage() {
         fat: data.fat,
       };
 
+      addDebugInfo(`Saving meal with ID: ${newEntry.id}, editing: ${!!mealId}`);
+
       await saveMeal(user.uid, newEntry);
+      setEditingMealId(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to analyze food');
       addDebugInfo(`Error analyzing food: ${err}`);
@@ -275,15 +308,17 @@ export default function CaloriesPage() {
       </div>
 
       <div className="mt-8 space-y-6">
+        {/* Online status indicator hidden
         <div className="flex items-center gap-2 justify-center">
           <div className={`w-3 h-3 rounded-full ${isOnline ? 'bg-green-500' : 'bg-red-500'}`} />
           <p className="text-sm text-muted-foreground">
             {isOnline ? 'Connected to speech services' : 'Offline - Speech recognition unavailable'}
           </p>
         </div>
+        */}
 
         <Button 
-          onClick={startListening}
+          onClick={() => startListening()}
           className="w-full py-8 text-lg"
           variant={isListening ? "destructive" : "default"}
           disabled={!isOnline}
@@ -304,7 +339,11 @@ export default function CaloriesPage() {
         )}
 
         {foodEntries.length > 0 && (
-          <Accordion type="multiple" className="w-full">
+          <Accordion 
+            type="multiple" 
+            className="w-full"
+            defaultValue={[startOfDay(new Date()).toISOString()]}
+          >
             {groupEntriesByDay(foodEntries).map((dailyTotal) => (
               <AccordionItem key={dailyTotal.date.toISOString()} value={dailyTotal.date.toISOString()}>
                 <AccordionTrigger className="px-4">
@@ -313,10 +352,10 @@ export default function CaloriesPage() {
                       {format(dailyTotal.date, 'EEEE, MMMM d, yyyy')}
                     </span>
                     <div className="flex gap-6 text-sm">
-                      <span>{dailyTotal.totalCalories} cal</span>
                       <span>{dailyTotal.totalProtein}g protein</span>
                       <span>{dailyTotal.totalCarbs}g carbs</span>
                       <span>{dailyTotal.totalFat}g fat</span>
+                      <span className="font-semibold">{dailyTotal.totalCalories} cal</span>
                     </div>
                   </div>
                 </AccordionTrigger>
@@ -325,23 +364,46 @@ export default function CaloriesPage() {
                     <Table>
                       <TableHeader>
                         <TableRow>
+                          <TableHead></TableHead>
                           <TableHead>Time</TableHead>
-                          <TableHead>Description</TableHead>
-                          <TableHead className="text-right">Calories</TableHead>
+                          <TableHead className="w-full">Description</TableHead>
                           <TableHead className="text-right">Protein</TableHead>
                           <TableHead className="text-right">Carbs</TableHead>
                           <TableHead className="text-right">Fat</TableHead>
+                          <TableHead className="text-right font-semibold">Calories</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
                         {dailyTotal.entries.map((entry) => (
                           <TableRow key={entry.id}>
+                            <TableCell>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8"
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  startListening(entry.id);
+                                }}
+                                disabled={isListening || isAnalyzing}
+                              >
+                                <Pencil className="h-4 w-4" />
+                              </Button>
+                            </TableCell>
                             <TableCell>{format(entry.timestamp, 'HH:mm')}</TableCell>
-                            <TableCell>{entry.description}</TableCell>
-                            <TableCell className="text-right">{entry.calories}</TableCell>
+                            <TableCell className="w-full">
+                              {editingMealId === entry.id && isListening ? (
+                                <span className="text-muted-foreground italic">Listening...</span>
+                              ) : editingMealId === entry.id && isAnalyzing ? (
+                                <span className="text-muted-foreground italic">Analyzing...</span>
+                              ) : (
+                                entry.description
+                              )}
+                            </TableCell>
                             <TableCell className="text-right">{entry.protein}g</TableCell>
                             <TableCell className="text-right">{entry.carbs}g</TableCell>
                             <TableCell className="text-right">{entry.fat}g</TableCell>
+                            <TableCell className="text-right font-semibold">{entry.calories}</TableCell>
                           </TableRow>
                         ))}
                       </TableBody>
@@ -353,6 +415,7 @@ export default function CaloriesPage() {
           </Accordion>
         )}
 
+        {/* Notes hidden
         <div className="text-sm text-muted-foreground text-center">
           <p>Note: Speech recognition requires an internet connection as it uses Google's speech services.</p>
           {process.env.NODE_ENV === 'development' && (
@@ -361,24 +424,27 @@ export default function CaloriesPage() {
               development environment isn't blocking external requests.
             </p>
           )}
-          
-          {/* Debug Information */}
-          {debugInfo.length > 0 && (
-            <div className="mt-4 p-4 bg-slate-100 rounded-lg text-left">
-              <p className="font-medium mb-2">Debug Information:</p>
-              {debugInfo.map((info, index) => (
-                <p key={index} className="text-xs font-mono">{info}</p>
-              ))}
+        </div>
+        */}
+        
+        {/* Debug Information */}
+        {debugInfo.length > 0 && (
+          <div className="mt-4 p-4 bg-slate-100 rounded-lg text-left">
+            <div className="flex justify-between items-center mb-2">
+              <p className="font-medium">Debug Information:</p>
               <Button 
                 onClick={() => setDebugInfo([])} 
                 variant="outline" 
-                className="mt-2 text-xs"
+                size="sm"
               >
-                Clear Debug Info
+                Clear
               </Button>
             </div>
-          )}
-        </div>
+            {debugInfo.map((info, index) => (
+              <p key={index} className="text-xs font-mono whitespace-pre-wrap">{info}</p>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   )
