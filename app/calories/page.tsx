@@ -351,7 +351,7 @@ export default function CaloriesPage() {
       <div className="container mx-auto py-8 px-4 max-w-3xl pb-32">
         <div className="flex justify-between items-start mb-8">
           <div>
-            <Link href="/" className="hover:opacity-80 transition-opacity">
+            <Link href="/calories" className="hover:opacity-80 transition-opacity">
               <h1 className="text-5xl font-medium tracking-wide">Lazy Lifts</h1>
             </Link>
           </div>

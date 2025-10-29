@@ -20,14 +20,14 @@ export function UserNav() {
   return (
     <div className="flex items-center gap-4">
       <div className="flex gap-2">
-        <Link href="/">
-          <Button variant="ghost" className="text-base font-medium">
-            Lift
-          </Button>
-        </Link>
         <Link href="/calories">
           <Button variant="ghost" className="text-base font-medium">
             Eat
+          </Button>
+        </Link>
+        <Link href="/lift">
+          <Button variant="ghost" className="text-base font-medium">
+            Lift
           </Button>
         </Link>
         <div className="ml-auto">
