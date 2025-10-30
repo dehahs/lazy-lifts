@@ -317,14 +317,14 @@ export default function CaloriesPage() {
     <>
       <div className="container mx-auto py-8 px-4 max-w-3xl pb-32">
         <div className="flex justify-between items-start mb-8">
-          <div>
-            <Link href="/calories" className="hover:opacity-80 transition-opacity">
+          <div className="flex-shrink-0">
+            <Link href="/calories" className="hover:opacity-80 transition-opacity inline-block">
               <Image 
                 src="/lazylifts-logo.png" 
                 alt="Lazy Lifts" 
                 width={200} 
                 height={84}
-                className="h-auto max-h-[84px]"
+                className="h-auto max-h-[84px] w-auto max-w-[200px]"
                 priority
               />
             </Link>
@@ -362,7 +362,7 @@ export default function CaloriesPage() {
             {isRecording && (
               <>
                 {[1, 2, 3, 4].map((circle) => {
-                  const circleSize = 120 + circle * 40
+                  const circleSize = 240 + circle * 40
                   const opacity = Math.max(0.1, volume - (circle - 1) * 0.2)
                   const scale = 1 + volume * 0.3 + (circle - 1) * 0.1
                   
@@ -402,14 +402,14 @@ export default function CaloriesPage() {
                 ${isRecording ? 'ring-4 ring-white' : ''}
               `}
               style={{
-                width: '120px',
-                height: '120px',
+                width: '240px',
+                height: '240px',
               }}
             >
               {isRecording ? (
-                <Stop className="w-12 h-12 text-white mx-auto" weight="fill" />
+                <Stop className="w-24 h-24 text-white mx-auto" weight="fill" />
               ) : (
-                <Microphone className="w-12 h-12 text-white mx-auto" weight="fill" />
+                <Microphone className="w-24 h-24 text-white mx-auto" weight="fill" />
               )}
             </button>
           </div>
