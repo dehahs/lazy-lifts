@@ -23,6 +23,8 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from "@/components/ui/accordion"
+import { useWhisper } from "@/hooks/use-whisper"
+import { Progress } from "@/components/ui/progress"
 
 interface FoodEntry {
   id: string
@@ -113,24 +115,37 @@ function groupEntriesByDay(entries: FoodEntry[]): YearGroup[] {
 
 export default function CaloriesPage() {
   const { user } = useAuth()
-  const [transcript, setTranscript] = useState("")
-  const [isListening, setIsListening] = useState(false)
-  const [isOnline, setIsOnline] = useState(true)
   const [isAnalyzing, setIsAnalyzing] = useState(false)
   const [foodEntries, setFoodEntries] = useState<FoodEntry[]>([])
   const [error, setError] = useState<string | null>(null)
   const [editingMealId, setEditingMealId] = useState<string | null>(null)
   const [deletingMealId, setDeletingMealId] = useState<string | null>(null)
 
+  const {
+    isRecording,
+    isTranscribing,
+    isModelLoading,
+    modelLoadProgress,
+    transcript,
+    error: whisperError,
+    startRecording,
+    stopRecording
+  } = useWhisper({
+    onTranscriptionComplete: (text, mealId) => {
+      analyzeFood(text, mealId || null)
+      setEditingMealId(null)
+    },
+    onError: (err) => {
+      setError(err.message)
+    }
+  })
+
   const handleDeleteMeal = async (mealId: string) => {
     if (!user) return;
     try {
-      addDebugInfo(`Deleting meal: ${mealId}`);
       await deleteMeal(user.uid, mealId);
-      addDebugInfo(`Successfully deleted meal: ${mealId}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to delete meal');
-      addDebugInfo(`Error deleting meal: ${err}`);
     } finally {
       setDeletingMealId(null);
     }
@@ -141,7 +156,6 @@ export default function CaloriesPage() {
     if (!user) return
 
     const unsubscribe = subscribeToMeals(user.uid, (meals) => {
-      addDebugInfo(`Received ${meals.length} meals from Firestore`)
       setFoodEntries(meals.map(meal => ({
         id: meal.id,
         timestamp: meal.timestamp,
@@ -156,85 +170,10 @@ export default function CaloriesPage() {
     return () => unsubscribe()
   }, [user])
 
-  // Monitor online/offline status
-  useEffect(() => {
-    const handleOnline = () => setIsOnline(true)
-    const handleOffline = () => setIsOnline(false)
-
-    // Set initial status
-    setIsOnline(navigator.onLine)
-
-    // Add event listeners
-    window.addEventListener('online', handleOnline)
-    window.addEventListener('offline', handleOffline)
-
-    return () => {
-      window.removeEventListener('online', handleOnline)
-      window.removeEventListener('offline', handleOffline)
-    }
-  }, [])
-
-  const [debugInfo, setDebugInfo] = useState<string[]>([])
-
-  const addDebugInfo = (info: string) => {
-    setDebugInfo(prev => [...prev, `${new Date().toLocaleTimeString()}: ${info}`])
+  const handleStartRecording = (mealId?: string) => {
+    setEditingMealId(mealId || null)
+    startRecording(mealId)
   }
-
-  useEffect(() => {
-    // Check browser compatibility on mount
-    const isDia = /Electron/.test(navigator.userAgent)
-    const isChromeOrEdge = /Chrome|Edge/.test(navigator.userAgent) && !/Edg\//.test(navigator.userAgent)
-    
-    if (isDia) {
-      addDebugInfo('You are using Dia (Electron-based browser)')
-      addDebugInfo('Speech recognition may not work in Dia due to Electron security restrictions')
-      addDebugInfo('Please use Chrome, Edge, or another Chromium-based browser for this feature')
-    } else if (!isChromeOrEdge) {
-      addDebugInfo('Warning: Speech recognition works best in Chrome or Edge browsers')
-    }
-    
-    if (!('webkitSpeechRecognition' in window)) {
-      addDebugInfo('Error: Speech recognition is not supported in this browser')
-    } else {
-      addDebugInfo('Speech recognition API is available in this browser')
-    }
-  }, [])
-
-  const startListening = (mealId?: string) => {
-    const editId = mealId || null
-    addDebugInfo(`Starting to listen for ${editId ? 'edit of meal ' + editId : 'new meal'}`)
-    setEditingMealId(editId)
-    if (!('webkitSpeechRecognition' in window)) {
-      alert('Speech recognition is not supported in this browser. Please use Chrome.')
-      return
-    }
-
-    addDebugInfo('Starting speech recognition...')
-    const recognition = new (window as any).webkitSpeechRecognition()
-    recognition.continuous = false
-    recognition.interimResults = false
-    
-    // Store the meal ID directly on the recognition instance
-    const boundMealId = editId
-    
-    // Add more configuration for debugging
-    recognition.lang = 'en-US' // Explicitly set language
-    addDebugInfo(`Speech recognition configured with language: ${recognition.lang}`)
-    addDebugInfo(`Bound meal ID: ${boundMealId || 'new'}`)
-
-    recognition.onstart = () => {
-      setIsListening(true)
-    }
-
-    recognition.onresult = async (event: any) => {
-      const transcript = event.results[0][0].transcript
-      addDebugInfo(`Got transcript for meal ${boundMealId || 'new'}: ${transcript}`)
-      addDebugInfo(`Bound meal ID: ${boundMealId || 'new'}`)
-      
-      setTranscript(transcript)
-      setIsListening(false)
-      await analyzeFood(transcript, boundMealId)
-    }
 
   const analyzeFood = async (description: string, mealId: string | null = null) => {
     if (!user) {
@@ -246,7 +185,6 @@ export default function CaloriesPage() {
       setIsAnalyzing(true)
       setError(null)
 
-      addDebugInfo(`Sending food description to analyze: ${description}`);
       const response = await fetch('/api/analyze-food', {
         method: 'POST',
         headers: {
@@ -257,28 +195,18 @@ export default function CaloriesPage() {
 
       if (!response.ok) {
         const errorData = await response.json();
-        addDebugInfo(`API error: ${errorData.error || response.statusText}`);
         throw new Error(errorData.error || 'Failed to analyze food');
       }
 
       const data = await response.json();
-      addDebugInfo(`Received analysis: ${JSON.stringify(data)}`);
-      addDebugInfo(`Processing meal with ID: ${mealId || 'new'}`);
-      
+
       // If editing, find the original entry to preserve its timestamp
-      const originalEntry = mealId 
+      const originalEntry = mealId
         ? foodEntries.find(entry => entry.id === mealId)
         : null;
 
-      addDebugInfo(`Editing meal: ${mealId || 'new'}`)
-      if (mealId) {
-        addDebugInfo(`Original entry found: ${!!originalEntry}`)
-      }
-
       if (!originalEntry && mealId) {
-        const error = 'Could not find original entry';
-        addDebugInfo(`Error: ${error}`);
-        throw new Error(error);
+        throw new Error('Could not find original entry');
       }
 
       const newEntry: Omit<FirestoreMealEntry, 'ownerUid'> = {
@@ -291,59 +219,13 @@ export default function CaloriesPage() {
         fat: Number(data.fat.toFixed(1)),
       };
 
-      addDebugInfo(`Saving meal with ID: ${newEntry.id}, editing: ${!!mealId}`);
-
       await saveMeal(user.uid, newEntry);
       setEditingMealId(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to analyze food');
-      addDebugInfo(`Error analyzing food: ${err}`);
     } finally {
       setIsAnalyzing(false)
     }
-  }
-
-    recognition.onerror = (event: any) => {
-      setIsListening(false)
-      
-      const errorMessages: { [key: string]: string } = {
-        'network': 'Network error. Please check your internet connection.',
-        'no-speech': 'No speech was detected. Please try again.',
-        'audio-capture': 'No microphone was found or microphone access was denied.',
-        'not-allowed': 'Microphone permission was denied. Please allow microphone access.',
-        'aborted': 'Speech recognition was aborted.',
-        'default': 'An error occurred with speech recognition.'
-      }
-
-      const message = errorMessages[event.error] || errorMessages.default
-      setTranscript(`Error: ${message}`)
-      
-      // Add detailed error information
-      addDebugInfo(`Speech recognition error: ${event.error}`)
-      addDebugInfo(`Error message: ${message}`)
-      
-      if (event.error === 'network') {
-        const isDia = /Electron/.test(navigator.userAgent)
-        if (isDia) {
-          addDebugInfo('Network error in Dia browser:')
-          addDebugInfo('The speech recognition feature is not fully supported in Dia')
-          addDebugInfo('Please try using Chrome, Edge, or another Chromium-based browser')
-          addDebugInfo('This is a known limitation with Electron-based browsers')
-        } else {
-          addDebugInfo('Troubleshooting tips for network error:')
-          addDebugInfo('1. Check if you can access google.com in your browser')
-          addDebugInfo('2. Check if your firewall is blocking WebRTC or speech recognition')
-          addDebugInfo('3. Try using a different Chrome profile or clearing browser data')
-          addDebugInfo('4. If using a VPN, try disabling it temporarily')
-        }
-      }
-    }
-
-    recognition.onend = () => {
-      setIsListening(false)
-    }
-
-    recognition.start()
   }
 
   return (
@@ -359,28 +241,34 @@ export default function CaloriesPage() {
         </div>
 
         <div className="mt-8 space-y-6">
-          {/* Online status indicator hidden
-          <div className="flex items-center gap-2 justify-center">
-            <div className={`w-3 h-3 rounded-full ${isOnline ? 'bg-green-500' : 'bg-red-500'}`} />
-            <p className="text-sm text-muted-foreground">
-              {isOnline ? 'Connected to speech services' : 'Offline - Speech recognition unavailable'}
-            </p>
-          </div>
-          */}
+          {/* Model loading progress */}
+          {isModelLoading && (
+            <div className="p-4 rounded-lg border bg-card text-card-foreground">
+              <p className="text-sm text-muted-foreground mb-2">
+                Loading speech model... (one-time download, ~74MB)
+              </p>
+              <Progress value={modelLoadProgress} className="h-2" />
+              <p className="text-xs text-muted-foreground mt-2 text-center">
+                {modelLoadProgress}%
+              </p>
+            </div>
+          )}
 
-          {/* Main button moved to fixed bottom */}
-
-        {(transcript || isAnalyzing) && (
-          <div className="p-4 rounded-lg border bg-card text-card-foreground">
-            {transcript && <p className="text-lg">{transcript}</p>}
-            {isAnalyzing && (
-              <p className="text-sm text-muted-foreground mt-2">Analyzing your meal...</p>
-            )}
-            {error && (
-              <p className="text-sm text-red-500 mt-2">{error}</p>
-            )}
-          </div>
-        )}
+          {/* Transcription and analysis status */}
+          {(transcript || isAnalyzing || isTranscribing) && !isModelLoading && (
+            <div className="p-4 rounded-lg border bg-card text-card-foreground">
+              {isTranscribing && (
+                <p className="text-sm text-muted-foreground">Transcribing audio...</p>
+              )}
+              {transcript && !isTranscribing && <p className="text-lg">{transcript}</p>}
+              {isAnalyzing && (
+                <p className="text-sm text-muted-foreground mt-2">Analyzing your meal...</p>
+              )}
+              {(error || whisperError) && (
+                <p className="text-sm text-red-500 mt-2">{error || whisperError}</p>
+              )}
+            </div>
+          )}
 
         {foodEntries.length > 0 && (
           <div className="space-y-6">
@@ -430,9 +318,9 @@ export default function CaloriesPage() {
                                   className="h-8 w-8"
                                   onClick={(e) => {
                                     e.preventDefault();
-                                    startListening(entry.id);
+                                    handleStartRecording(entry.id);
                                   }}
-                                  disabled={isListening || isAnalyzing || deletingMealId === entry.id}
+                                  disabled={isRecording || isTranscribing || isAnalyzing || isModelLoading || deletingMealId === entry.id}
                                 >
                                   <Pencil className="h-4 w-4" />
                                 </Button>
@@ -461,7 +349,7 @@ export default function CaloriesPage() {
                                     size="icon"
                                     className="h-8 w-8 text-destructive hover:text-destructive/90"
                                     onClick={() => setDeletingMealId(entry.id)}
-                                    disabled={isListening || isAnalyzing}
+                                    disabled={isRecording || isTranscribing || isAnalyzing}
                                   >
                                     <Trash2 className="h-4 w-4" />
                                   </Button>
@@ -470,8 +358,10 @@ export default function CaloriesPage() {
                             </TableCell>
                             <TableCell>{format(entry.timestamp, 'HH:mm')}</TableCell>
                             <TableCell className="w-full">
-                              {editingMealId === entry.id && isListening ? (
-                                <span className="text-muted-foreground italic">Listening...</span>
+                              {editingMealId === entry.id && isRecording ? (
+                                <span className="text-muted-foreground italic">Recording...</span>
+                              ) : editingMealId === entry.id && isTranscribing ? (
+                                <span className="text-muted-foreground italic">Transcribing...</span>
                               ) : editingMealId === entry.id && isAnalyzing ? (
                                 <span className="text-muted-foreground italic">Analyzing...</span>
                               ) : (
@@ -527,11 +417,19 @@ export default function CaloriesPage() {
       </div>
 
       <StickyActionButton
-        onClick={() => startListening()}
-        variant={isListening ? "destructive" : "default"}
-        disabled={!isOnline}
+        onClick={() => isRecording ? stopRecording() : handleStartRecording()}
+        variant={isRecording ? "destructive" : "default"}
+        disabled={isModelLoading || isTranscribing || isAnalyzing}
       >
-        {isListening ? "Listening..." : "What did you eat?"}
+        {isModelLoading
+          ? `Loading model... ${modelLoadProgress}%`
+          : isRecording
+          ? "Stop Recording"
+          : isTranscribing
+          ? "Transcribing..."
+          : isAnalyzing
+          ? "Analyzing..."
+          : "What did you eat?"}
       </StickyActionButton>
     </>
   )

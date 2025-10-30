@@ -26,6 +26,29 @@ const nextConfig = {
   // For standalone deployment, uncomment these if you want to deploy to a subdirectory
   // basePath: '/lazy-lifts',
   // assetPrefix: '/lazy-lifts',
+  webpack: (config, { isServer }) => {
+    // Fixes npm packages that depend on `fs` module
+    if (!isServer) {
+      config.resolve.fallback = {
+        ...config.resolve.fallback,
+        fs: false,
+      };
+    }
+
+    // Add rule for WASM files
+    config.module.rules.push({
+      test: /\.wasm$/,
+      type: 'asset/resource',
+    });
+
+    // Add rule for ONNX files
+    config.module.rules.push({
+      test: /\.onnx$/,
+      type: 'asset/resource',
+    });
+
+    return config;
+  },
 }
 
 mergeConfig(nextConfig, userConfig)
