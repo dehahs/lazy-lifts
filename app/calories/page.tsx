@@ -18,8 +18,7 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { format, isSameDay, startOfDay } from "date-fns"
-import { useWhisper } from "@/hooks/use-whisper"
-import { Progress } from "@/components/ui/progress"
+import { useSpeechRecognition } from "@/hooks/use-speech-recognition"
 import { Microphone, Stop } from "phosphor-react"
 
 interface FoodEntry {
@@ -131,7 +130,7 @@ export default function CaloriesPage() {
     volume,
     startRecording,
     stopRecording
-  } = useWhisper({
+  } = useSpeechRecognition({
     onTranscriptionComplete: (text, mealId) => {
       setDisplayTranscript(text)
       analyzeFood(text, mealId || null)
@@ -332,23 +331,11 @@ export default function CaloriesPage() {
           <UserNav />
         </div>
 
-        {/* Model loading progress */}
-        {isModelLoading && (
-          <div className="mt-8 p-4 rounded-lg border bg-card text-card-foreground">
-            <p className="text-sm text-muted-foreground mb-2">
-              Loading speech model... (one-time download, ~74MB)
-            </p>
-            <Progress value={modelLoadProgress} className="h-2" />
-            <p className="text-xs text-muted-foreground mt-2 text-center">
-              {modelLoadProgress}%
-            </p>
-          </div>
-        )}
 
         {/* Main recording interface */}
         <div className="flex flex-col items-center justify-center mt-16 mb-16">
           {/* Title */}
-          {!isRecording && !isModelLoading && (
+          {!isRecording && (
             <h2 className="text-3xl font-bold mb-12">What did you eat?</h2>
           )}
           
@@ -386,14 +373,14 @@ export default function CaloriesPage() {
             {/* Record/Stop button */}
             <button
               onClick={() => isRecording ? stopRecording() : handleStartRecording()}
-              disabled={isModelLoading || isTranscribing || isAnalyzing}
+              disabled={isTranscribing || isAnalyzing}
               className={`
                 relative z-10 rounded-full p-8
                 ${isRecording
                   ? 'bg-[#F15A1B] hover:bg-[#D14815]'
                   : 'bg-[#F15A1B] hover:bg-[#D14815]'
                 }
-                ${isModelLoading || isTranscribing || isAnalyzing
+                ${isTranscribing || isAnalyzing
                   ? 'opacity-50 cursor-not-allowed'
                   : 'cursor-pointer'
                 }
@@ -582,7 +569,7 @@ export default function CaloriesPage() {
                                           e.stopPropagation();
                                           handleStartRecording(entry.id);
                                         }}
-                                        disabled={isRecording || isTranscribing || isAnalyzing || isModelLoading || deletingMealId === entry.id}
+                                        disabled={isRecording || isTranscribing || isAnalyzing || deletingMealId === entry.id}
                                       >
                                         <Microphone className="h-4 w-4 sm:h-5 sm:w-5 text-[#F15A1B]" weight="fill" />
                                       </Button>
