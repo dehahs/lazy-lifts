@@ -406,15 +406,6 @@ export default function CaloriesPage() {
             </button>
           </div>
 
-          {/* Transcribed text display */}
-          {displayTranscript && (
-            <div 
-              className="mt-8 px-6 py-4 bg-black text-white rounded-lg text-center max-w-md animate-in fade-in duration-300"
-            >
-              <p className="text-base">{displayTranscript}</p>
-            </div>
-          )}
-
           {/* Error display */}
           {(error || whisperError) && (
             <div className="mt-4 px-4 py-2 bg-red-100 text-red-700 rounded-lg text-sm">
@@ -422,6 +413,15 @@ export default function CaloriesPage() {
             </div>
           )}
         </div>
+
+        {/* Transcribed text display - fixed at bottom of viewport */}
+        {displayTranscript && (
+          <div 
+            className="fixed bottom-8 left-1/2 transform -translate-x-1/2 px-6 py-4 bg-black text-white rounded-lg text-center max-w-md animate-in fade-in duration-300 z-50"
+          >
+            <p className="text-base">{displayTranscript}</p>
+          </div>
+        )}
 
         {/* Weekly calorie chart */}
         <div className="mt-16 mb-8">
