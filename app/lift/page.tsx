@@ -532,8 +532,8 @@ export default function LiftingApp() {
                       "cursor-pointer py-3 p-1",
                       activeWorkout && activeWorkout.week === week && activeWorkout.day === day
                         ? selectedWorkout && selectedWorkout.week === activeWorkout.week && selectedWorkout.day === activeWorkout.day
-                          ? "latest-incomplete hover:bg-red-600"
-                          : "latest-incomplete-dimmed hover:bg-red-600"
+                          ? "latest-incomplete hover:bg-[#D14815]"
+                          : "latest-incomplete-dimmed hover:bg-[#D14815]"
                         : selectedWorkout && selectedWorkout.week === week && selectedWorkout.day === day
                           ? "selected-day selected-cell hover:bg-transparent"
                           : weekData[day]?.completed

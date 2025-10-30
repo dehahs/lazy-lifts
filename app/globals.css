@@ -25,7 +25,7 @@
     --accent: 210 40% 96.1%;
     --accent-foreground: 222.2 47.4% 11.2%;
 
-    --destructive: 0 84.2% 60.2%;
+    --destructive: 18 88% 53%;
     --destructive-foreground: 210 40% 98%;
 
     --border: 214.3 31.8% 91.4%;
@@ -57,7 +57,7 @@
     --accent: 217.2 32.6% 17.5%;
     --accent-foreground: 210 40% 98%;
 
-    --destructive: 0 62.8% 30.6%;
+    --destructive: 18 88% 35%;
     --destructive-foreground: 210 40% 98%;
 
     --border: 217.2 32.6% 17.5%;
@@ -127,38 +127,38 @@
 
 /* Global styles for interactive elements */
 a {
-  color: #ef4444;
+  color: #F15A1B;
   transition: color 0.2s ease;
 }
 
 a:hover {
-  color: #dc2626; /* Slightly darker shade for hover */
+  color: #D14815; /* Slightly darker shade for hover */
 }
 
 button:not([class*="bg-"]):not([class*="hover:bg-"]):not([class*="text-white"]):not([class*="border-"]):hover {
-  color: #ef4444;
+  color: #F15A1B;
 }
 
-.btn-primary, 
+.btn-primary,
 button.bg-primary,
 button:not([class*="bg-"]):not([class*="border-"]):not([class*="text-"]):not([class*="hover:"]) {
-  background-color: #ef4444 !important;
+  background-color: #F15A1B !important;
   color: white !important;
 }
 
-.btn-primary:hover, 
+.btn-primary:hover,
 button.bg-primary:hover,
 button:not([class*="bg-"]):not([class*="border-"]):not([class*="text-"]):not([class*="hover:"]):hover {
-  background-color: #dc2626 !important;
+  background-color: #D14815 !important;
 }
 
 button[variant="outline"]:not([class*="border-"]) {
-  border-color: #ef4444 !important;
-  color: #ef4444 !important;
+  border-color: #F15A1B !important;
+  color: #F15A1B !important;
 }
 
 button[variant="outline"]:not([class*="border-"]):hover {
-  background-color: rgba(239, 68, 68, 0.1) !important;
+  background-color: rgba(241, 90, 27, 0.1) !important;
 }
 
 /* Add specific styling for the first row and column to ensure all borders are visible */
@@ -246,7 +246,7 @@ button[variant="outline"]:not([class*="border-"]):hover {
 
 /* Style for selected cell with full border */
 .schedule-table .selected-cell {
-  outline: 2px solid #ef4444;
+  outline: 2px solid #F15A1B;
   position: relative;
   z-index: 10;
   background-color: transparent !important; /* Ensure no background color is applied */
@@ -265,23 +265,23 @@ button[variant="outline"]:not([class*="border-"]):hover {
   color: #6b7280;
 }
 
-/* Latest incomplete workout - red background with white text */
+/* Latest incomplete workout - orange background with white text */
 .schedule-table td.latest-incomplete {
-  background-color: #ef4444;
+  background-color: #F15A1B;
   color: white;
   font-weight: 500;
 }
 
 /* Latest incomplete workout when not selected - reduced opacity */
 .schedule-table td.latest-incomplete-dimmed {
-  background-color: rgba(239, 68, 68, 0.7); /* #ef4444 with 70% opacity (30% transparency) */
+  background-color: rgba(241, 90, 27, 0.7); /* #F15A1B with 70% opacity (30% transparency) */
   color: white;
   font-weight: 500;
 }
 
-/* Selected day - red border with red text (already defined above with .selected-cell) */
+/* Selected day - orange border with orange text (already defined above with .selected-cell) */
 .schedule-table td.selected-day {
-  color: #ef4444;
+  color: #F15A1B;
   font-weight: 500;
   background-color: transparent !important; /* Ensure no background color is applied */
 }

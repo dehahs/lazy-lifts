@@ -265,7 +265,7 @@ export default function CaloriesPage() {
                 <p className="text-sm text-muted-foreground mt-2">Analyzing your meal...</p>
               )}
               {(error || whisperError) && (
-                <p className="text-sm text-red-500 mt-2">{error || whisperError}</p>
+                <p className="text-sm text-[#F15A1B] mt-2">{error || whisperError}</p>
               )}
             </div>
           )}

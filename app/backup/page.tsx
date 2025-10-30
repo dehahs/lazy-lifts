@@ -94,7 +94,7 @@ export default function BackupPage() {
           </Button>
 
           {error && (
-            <div className="mt-4 p-4 bg-red-50 text-red-600 rounded-md">
+            <div className="mt-4 p-4 bg-orange-50 text-[#F15A1B] rounded-md">
               {error}
             </div>
           )}
