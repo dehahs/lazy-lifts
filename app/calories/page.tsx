@@ -369,7 +369,7 @@ export default function CaloriesPage() {
                   return (
                     <div
                       key={circle}
-                      className="absolute rounded-full border-2 border-orange-500"
+                      className="absolute rounded-full border-2 border-[#F15A1B]"
                       style={{
                         width: `${circleSize}px`,
                         height: `${circleSize}px`,
@@ -389,16 +389,16 @@ export default function CaloriesPage() {
               disabled={isModelLoading || isTranscribing || isAnalyzing}
               className={`
                 relative z-10 rounded-full p-8
-                ${isRecording 
-                  ? 'bg-orange-500 hover:bg-orange-600' 
-                  : 'bg-orange-500 hover:bg-orange-600'
+                ${isRecording
+                  ? 'bg-[#F15A1B] hover:bg-[#D14815]'
+                  : 'bg-[#F15A1B] hover:bg-[#D14815]'
                 }
-                ${isModelLoading || isTranscribing || isAnalyzing 
-                  ? 'opacity-50 cursor-not-allowed' 
+                ${isModelLoading || isTranscribing || isAnalyzing
+                  ? 'opacity-50 cursor-not-allowed'
                   : 'cursor-pointer'
                 }
                 transition-all duration-200
-                focus:outline-none focus:ring-4 focus:ring-orange-300
+                focus:outline-none focus:ring-4 focus:ring-[#F15A1B]/30
                 ${isRecording ? 'ring-4 ring-white' : ''}
               `}
               style={{
@@ -460,8 +460,8 @@ export default function CaloriesPage() {
                       {/* Bar */}
                       <div
                         className={`w-full rounded-t transition-all duration-300 ${
-                          dayData.isToday 
-                            ? 'bg-orange-500' 
+                          dayData.isToday
+                            ? 'bg-[#F15A1B]'
                             : 'bg-gray-300'
                         }`}
                         style={{
@@ -584,7 +584,7 @@ export default function CaloriesPage() {
                                         }}
                                         disabled={isRecording || isTranscribing || isAnalyzing || isModelLoading || deletingMealId === entry.id}
                                       >
-                                        <Microphone className="h-4 w-4 sm:h-5 sm:w-5 text-orange-500" weight="fill" />
+                                        <Microphone className="h-4 w-4 sm:h-5 sm:w-5 text-[#F15A1B]" weight="fill" />
                                       </Button>
                                       {deletingMealId === entry.id ? (
                                         <div className="flex flex-col gap-0.5">

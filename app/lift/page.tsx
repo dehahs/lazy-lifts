@@ -501,14 +501,14 @@ export default function LiftingApp() {
     <>
       <div className="container mx-auto py-8 px-4 max-w-3xl pb-32">
         <div className="flex justify-between items-start mb-8">
-          <div>
-            <Link href="/calories" className="hover:opacity-80 transition-opacity">
+          <div className="flex-shrink-0">
+            <Link href="/calories" className="hover:opacity-80 transition-opacity inline-block">
               <Image 
                 src="/lazylifts-logo.png" 
                 alt="Lazy Lifts" 
                 width={200} 
                 height={84}
-                className="h-auto max-h-[84px]"
+                className="h-auto max-h-[84px] w-auto max-w-[200px]"
                 priority
               />
               <p className="text-muted-foreground mt-1 text-lg tracking-wide">Cycle {currentCycle}</p>
