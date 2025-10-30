@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { UserNav } from "@/components/user-nav"
 import Link from "next/link"
+import Image from "next/image"
 import { ArrowLeft } from "lucide-react"
 
 export default function AboutPage() {
@@ -12,7 +13,14 @@ export default function AboutPage() {
       <div className="flex justify-between items-start mb-8">
         <div>
           <Link href="/" className="hover:opacity-80 transition-opacity">
-            <h1 className="text-5xl font-medium tracking-wide">Lazy Lifts</h1>
+            <Image 
+              src="/lazylifts-logo.png" 
+              alt="Lazy Lifts" 
+              width={200} 
+              height={84}
+              className="h-auto max-h-[84px]"
+              priority
+            />
           </Link>
         </div>
         <UserNav />

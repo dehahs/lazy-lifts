@@ -7,6 +7,7 @@ import { collection, query, orderBy } from "firebase/firestore"
 import { Button } from "@/components/ui/button"
 import { UserNav } from "@/components/user-nav"
 import Link from "next/link"
+import Image from "next/image"
 import { PencilSimple, Trash, X, Check, CaretRight, CaretDown } from "phosphor-react"
 import {
   Table,
@@ -318,7 +319,14 @@ export default function CaloriesPage() {
         <div className="flex justify-between items-start mb-8">
           <div>
             <Link href="/calories" className="hover:opacity-80 transition-opacity">
-              <h1 className="text-5xl font-medium tracking-wide">Lazy Lifts</h1>
+              <Image 
+                src="/lazylifts-logo.png" 
+                alt="Lazy Lifts" 
+                width={200} 
+                height={84}
+                className="h-auto max-h-[84px]"
+                priority
+              />
             </Link>
           </div>
           <UserNav />

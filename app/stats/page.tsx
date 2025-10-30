@@ -11,6 +11,7 @@ import { db, createUserDocument, safeGetDocs, subscribeToMeals } from "@/lib/fir
 import { collection, getDocs, query, orderBy, deleteDoc, doc, updateDoc } from "firebase/firestore"
 import { startOfDay, isSameDay } from "date-fns"
 import Link from "next/link"
+import Image from "next/image"
 import { Chart } from "@/components/ui/chart"
 
 type WeightEntry = {
@@ -289,7 +290,14 @@ export default function StatsPage() {
       <div className="flex justify-between items-start mb-8">
         <div>
           <Link href="/" className="hover:opacity-80 transition-opacity">
-            <h1 className="text-5xl font-medium tracking-wide">Lazy Lifts</h1>
+            <Image 
+              src="/lazylifts-logo.png" 
+              alt="Lazy Lifts" 
+              width={200} 
+              height={84}
+              className="h-auto max-h-[84px]"
+              priority
+            />
           </Link>
         </div>
         <UserNav />

@@ -10,6 +10,7 @@ import { useAuth } from "@/contexts/auth-context"
 import { doc, setDoc, collection, getDocs, query, where, orderBy, limit, deleteDoc } from "firebase/firestore"
 import { db, createUserDocument, safeGetDocs, createDocumentFallback } from "@/lib/firebase"
 import Link from "next/link"
+import Image from "next/image"
 
 // Define workout program structure
 type Exercise = {
@@ -502,7 +503,14 @@ export default function LiftingApp() {
         <div className="flex justify-between items-start mb-8">
           <div>
             <Link href="/calories" className="hover:opacity-80 transition-opacity">
-              <h1 className="text-5xl font-medium tracking-wide">Lazy Lifts</h1>
+              <Image 
+                src="/lazylifts-logo.png" 
+                alt="Lazy Lifts" 
+                width={200} 
+                height={84}
+                className="h-auto max-h-[84px]"
+                priority
+              />
               <p className="text-muted-foreground mt-1 text-lg tracking-wide">Cycle {currentCycle}</p>
             </Link>
           </div>

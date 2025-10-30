@@ -35,8 +35,8 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
         <meta name="apple-mobile-web-app-title" content="Lazy Lifts" />
         <meta name="format-detection" content="telephone=no" />
         <meta name="mobile-web-app-capable" content="yes" />
-        <link rel="apple-touch-icon" href="/icons/apple-icon-180.png" />
-        <link rel="icon" type="image/png" sizes="196x196" href="/icons/favicon-196.png" />
+        <link rel="apple-touch-icon" href="/lazylifts-logo.png" />
+        <link rel="icon" type="image/png" href="/lazylifts-logo.png" />
       </head>
       <body className={firaSansCondensed.className}>
         <AuthProvider>{children}</AuthProvider>
