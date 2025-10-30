@@ -432,7 +432,7 @@ export default function CaloriesPage() {
         )}
 
         {/* Weekly calorie chart */}
-        <div className="mt-16 mb-8">
+        <div className="mt-16 mb-16">
           <div className="flex items-end gap-2 h-32 relative">
             {/* Y-axis label and target line */}
             <div className="flex flex-col justify-start h-full pr-4 relative">
@@ -482,7 +482,7 @@ export default function CaloriesPage() {
           </div>
         </div>
 
-        <div className="mt-8 space-y-6">
+        <div className="space-y-6">
 
         {foodEntries.length > 0 && (
           <div className="space-y-6">
