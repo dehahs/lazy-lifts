@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useRef } from "react"
+import { useState, useEffect, useRef, Fragment } from "react"
 import { useAuth } from "@/contexts/auth-context"
 import { saveMeal, subscribeToMeals, deleteMeal, MealEntry as FirestoreMealEntry, db, safeGetDocs } from "@/lib/firebase"
 import { collection, query, orderBy } from "firebase/firestore"
@@ -478,158 +478,177 @@ export default function CaloriesPage() {
 
         {foodEntries.length > 0 && (
           <div className="space-y-6">
-            {groupEntriesByDay(foodEntries).map((yearGroup) => (
-              <div key={yearGroup.year}>
-                <h3 className="text-xl font-medium text-muted-foreground mb-4">{yearGroup.year}</h3>
-                <div className="rounded-lg border overflow-hidden">
-                  <div className="w-full overflow-x-hidden">
-                    <Table className="w-full table-auto">
-                      <colgroup>
-                        <col style={{ width: 'auto', minWidth: '0' }} />
-                        <col style={{ width: '65px' }} />
-                        <col style={{ width: '65px' }} />
-                        <col style={{ width: '65px' }} />
-                        <col style={{ width: '75px' }} />
-                      </colgroup>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead className="text-left px-2 sm:px-3">Date</TableHead>
-                          <TableHead className="text-right whitespace-nowrap px-2 sm:px-3">Protein</TableHead>
-                          <TableHead className="text-right whitespace-nowrap px-2 sm:px-3">Carbs</TableHead>
-                          <TableHead className="text-right whitespace-nowrap px-2 sm:px-3">Fat</TableHead>
-                          <TableHead className="text-right whitespace-nowrap px-2 sm:px-3">Calories</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {yearGroup.dailyTotals.map((dailyTotal) => {
-                          const dayKey = dailyTotal.date.toISOString()
-                          const isExpanded = expandedDays.has(dayKey)
-                          
-                          return (
-                            <>
-                              {/* Parent row - Daily total */}
-                              <TableRow 
-                                key={dayKey}
-                                className="bg-muted/50 cursor-pointer hover:bg-muted/70"
-                                onClick={() => {
-                                  const newExpanded = new Set(expandedDays)
-                                  if (isExpanded) {
-                                    newExpanded.delete(dayKey)
-                                  } else {
-                                    newExpanded.add(dayKey)
-                                  }
-                                  setExpandedDays(newExpanded)
-                                }}
-                              >
-                                <TableCell className="text-left px-2 sm:px-3 py-2 sm:py-3 max-w-0">
-                                  <div className="flex items-center gap-1 min-w-0">
-                                    {isExpanded ? (
-                                      <CaretDown className="h-3.5 w-3.5 flex-shrink-0" weight="bold" />
-                                    ) : (
-                                      <CaretRight className="h-3.5 w-3.5 flex-shrink-0" weight="bold" />
-                                    )}
-                                    <span className="font-medium text-xs sm:text-sm truncate">
-                                      {format(dailyTotal.date, 'EEE, MMM d')}
-                                    </span>
+            <div className="rounded-lg border overflow-hidden">
+              <div className="w-full overflow-x-hidden">
+                <Table className="w-full table-auto">
+                  <colgroup>
+                    <col style={{ width: 'auto', minWidth: '0' }} />
+                    <col style={{ width: '65px' }} />
+                    <col style={{ width: '65px' }} />
+                    <col style={{ width: '65px' }} />
+                    <col style={{ width: '75px' }} />
+                  </colgroup>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="text-left px-2 sm:px-3">Date</TableHead>
+                      <TableHead className="text-right whitespace-nowrap px-2 sm:px-3">Protein</TableHead>
+                      <TableHead className="text-right whitespace-nowrap px-2 sm:px-3">Carbs</TableHead>
+                      <TableHead className="text-right whitespace-nowrap px-2 sm:px-3">Fat</TableHead>
+                      <TableHead className="text-right whitespace-nowrap px-2 sm:px-3">Calories</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {(() => {
+                      // Flatten all daily totals from all year groups and sort chronologically
+                      const allDailyTotals = groupEntriesByDay(foodEntries)
+                        .flatMap(yearGroup => yearGroup.dailyTotals)
+                        .sort((a, b) => b.date.getTime() - a.date.getTime())
+                      
+                      return allDailyTotals.map((dailyTotal, index) => {
+                        const dayKey = dailyTotal.date.toISOString()
+                        const isExpanded = expandedDays.has(dayKey)
+                        const currentYear = dailyTotal.date.getFullYear()
+                        
+                        // Check if we need a year separator before this row
+                        // Show separator when transitioning from one year to another
+                        const prevDailyTotal = index > 0 ? allDailyTotals[index - 1] : null
+                        const needsYearSeparator = prevDailyTotal && prevDailyTotal.date.getFullYear() !== currentYear
+                        
+                        return (
+                          <Fragment key={dayKey}>
+                            {/* Year separator row */}
+                            {needsYearSeparator && (
+                              <TableRow key={`year-separator-${currentYear}`}>
+                                <TableCell colSpan={5} className="px-2 sm:px-3 py-4 bg-gray-800">
+                                  <div className="flex items-center justify-center">
+                                    <span className="text-xl font-medium text-white" style={{ fontFamily: 'sans-serif' }}>{currentYear}</span>
                                   </div>
                                 </TableCell>
-                                <TableCell className="text-right text-xs sm:text-sm whitespace-nowrap px-2 sm:px-3 py-2 sm:py-3">{Number(dailyTotal.totalProtein.toFixed(1))}g</TableCell>
-                                <TableCell className="text-right text-xs sm:text-sm whitespace-nowrap px-2 sm:px-3 py-2 sm:py-3">{Number(dailyTotal.totalCarbs.toFixed(1))}g</TableCell>
-                                <TableCell className="text-right text-xs sm:text-sm whitespace-nowrap px-2 sm:px-3 py-2 sm:py-3">{Number(dailyTotal.totalFat.toFixed(1))}g</TableCell>
-                                <TableCell className="text-right font-semibold text-xs sm:text-sm whitespace-nowrap px-2 sm:px-3 py-2 sm:py-3">{Number(dailyTotal.totalCalories.toFixed(1))}</TableCell>
                               </TableRow>
-                              
-                              {/* Child rows - Individual meals */}
-                              {isExpanded && dailyTotal.entries.map((entry) => (
-                                <TableRow key={entry.id} className="border-b">
-                                  <TableCell className="text-left px-2 sm:px-3 py-2 sm:py-3 pl-3 sm:pl-5 max-w-0">
-                                    <div className="flex gap-2 min-w-0">
-                                      {/* Left column: icons stacked vertically */}
-                                      <div className="flex flex-col items-start gap-0.5 flex-shrink-0">
-                                        <Button
-                                          variant="ghost"
-                                          size="icon"
-                                          className="h-5 w-5 sm:h-6 sm:w-6 p-0"
-                                          onClick={(e) => {
-                                            e.stopPropagation();
-                                            handleStartRecording(entry.id);
-                                          }}
-                                          disabled={isRecording || isTranscribing || isAnalyzing || isModelLoading || deletingMealId === entry.id}
-                                        >
-                                          <Microphone className="h-4 w-4 sm:h-5 sm:w-5 text-orange-500" weight="fill" />
-                                        </Button>
-                                        {deletingMealId === entry.id ? (
-                                          <div className="flex flex-col gap-0.5">
-                                            <Button
-                                              variant="ghost"
-                                              size="icon"
-                                              className="h-5 w-5 sm:h-6 sm:w-6 p-0 text-green-600 hover:text-green-700"
-                                              onClick={(e) => {
-                                                e.stopPropagation();
-                                                handleDeleteMeal(entry.id);
-                                              }}
-                                            >
-                                              <Check className="h-4 w-4 sm:h-5 sm:w-5" weight="bold" />
-                                            </Button>
-                                            <Button
-                                              variant="ghost"
-                                              size="icon"
-                                              className="h-5 w-5 sm:h-6 sm:w-6 p-0 text-muted-foreground"
-                                              onClick={(e) => {
-                                                e.stopPropagation();
-                                                setDeletingMealId(null);
-                                              }}
-                                            >
-                                              <X className="h-4 w-4 sm:h-5 sm:w-5" weight="bold" />
-                                            </Button>
-                                          </div>
-                                        ) : (
+                            )}
+                            
+                            {/* Parent row - Daily total */}
+                            <TableRow 
+                              key={dayKey}
+                              className="bg-muted/50 cursor-pointer hover:bg-muted/70"
+                              onClick={() => {
+                                const newExpanded = new Set(expandedDays)
+                                if (isExpanded) {
+                                  newExpanded.delete(dayKey)
+                                } else {
+                                  newExpanded.add(dayKey)
+                                }
+                                setExpandedDays(newExpanded)
+                              }}
+                            >
+                              <TableCell className="text-left px-2 sm:px-3 py-2 sm:py-3 max-w-0">
+                                <div className="flex items-center gap-1 min-w-0">
+                                  {isExpanded ? (
+                                    <CaretDown className="h-3.5 w-3.5 flex-shrink-0" weight="bold" />
+                                  ) : (
+                                    <CaretRight className="h-3.5 w-3.5 flex-shrink-0" weight="bold" />
+                                  )}
+                                  <span className="font-medium text-xs sm:text-sm truncate">
+                                    {format(dailyTotal.date, 'EEE, MMM d')}
+                                  </span>
+                                </div>
+                              </TableCell>
+                              <TableCell className="text-right text-xs sm:text-sm whitespace-nowrap px-2 sm:px-3 py-2 sm:py-3">{Number(dailyTotal.totalProtein.toFixed(1))}g</TableCell>
+                              <TableCell className="text-right text-xs sm:text-sm whitespace-nowrap px-2 sm:px-3 py-2 sm:py-3">{Number(dailyTotal.totalCarbs.toFixed(1))}g</TableCell>
+                              <TableCell className="text-right text-xs sm:text-sm whitespace-nowrap px-2 sm:px-3 py-2 sm:py-3">{Number(dailyTotal.totalFat.toFixed(1))}g</TableCell>
+                              <TableCell className="text-right font-semibold text-xs sm:text-sm whitespace-nowrap px-2 sm:px-3 py-2 sm:py-3">{Number(dailyTotal.totalCalories.toFixed(1))}</TableCell>
+                            </TableRow>
+                            
+                            {/* Child rows - Individual meals */}
+                            {isExpanded && dailyTotal.entries.map((entry) => (
+                              <TableRow key={entry.id} className="border-b">
+                                <TableCell className="text-left px-2 sm:px-3 py-2 sm:py-3 pl-3 sm:pl-5 max-w-0">
+                                  <div className="flex gap-2 min-w-0">
+                                    {/* Left column: icons stacked vertically */}
+                                    <div className="flex flex-col items-start gap-0.5 flex-shrink-0">
+                                      <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        className="h-5 w-5 sm:h-6 sm:w-6 p-0"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          handleStartRecording(entry.id);
+                                        }}
+                                        disabled={isRecording || isTranscribing || isAnalyzing || isModelLoading || deletingMealId === entry.id}
+                                      >
+                                        <Microphone className="h-4 w-4 sm:h-5 sm:w-5 text-orange-500" weight="fill" />
+                                      </Button>
+                                      {deletingMealId === entry.id ? (
+                                        <div className="flex flex-col gap-0.5">
                                           <Button
                                             variant="ghost"
                                             size="icon"
-                                            className="h-5 w-5 sm:h-6 sm:w-6 p-0 text-destructive hover:text-destructive/90"
+                                            className="h-5 w-5 sm:h-6 sm:w-6 p-0 text-green-600 hover:text-green-700"
                                             onClick={(e) => {
                                               e.stopPropagation();
-                                              setDeletingMealId(entry.id);
+                                              handleDeleteMeal(entry.id);
                                             }}
-                                            disabled={isRecording || isTranscribing || isAnalyzing}
                                           >
-                                            <Trash className="h-4 w-4 sm:h-5 sm:w-5" weight="regular" />
+                                            <Check className="h-4 w-4 sm:h-5 sm:w-5" weight="bold" />
                                           </Button>
-                                        )}
-                                      </div>
-                                      {/* Right side: timestamp and meal description */}
-                                      <div className="flex-1 min-w-0 flex flex-col">
-                                        <span className="text-xs text-muted-foreground whitespace-nowrap mb-1">{format(entry.timestamp, 'HH:mm')}</span>
-                                        <span className="text-xs break-words min-w-0 overflow-wrap-anywhere">
-                                          {editingMealId === entry.id && isRecording ? (
-                                            <span className="text-muted-foreground italic">Recording...</span>
-                                          ) : editingMealId === entry.id && isTranscribing ? (
-                                            <span className="text-muted-foreground italic">Transcribing...</span>
-                                          ) : editingMealId === entry.id && isAnalyzing ? (
-                                            <span className="text-muted-foreground italic">Analyzing...</span>
-                                          ) : (
-                                            entry.description
-                                          )}
-                                        </span>
-                                      </div>
+                                          <Button
+                                            variant="ghost"
+                                            size="icon"
+                                            className="h-5 w-5 sm:h-6 sm:w-6 p-0 text-muted-foreground"
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              setDeletingMealId(null);
+                                            }}
+                                          >
+                                            <X className="h-4 w-4 sm:h-5 sm:w-5" weight="bold" />
+                                          </Button>
+                                        </div>
+                                      ) : (
+                                        <Button
+                                          variant="ghost"
+                                          size="icon"
+                                          className="h-5 w-5 sm:h-6 sm:w-6 p-0 text-destructive hover:text-destructive/90"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            setDeletingMealId(entry.id);
+                                          }}
+                                          disabled={isRecording || isTranscribing || isAnalyzing}
+                                        >
+                                          <Trash className="h-4 w-4 sm:h-5 sm:w-5" weight="regular" />
+                                        </Button>
+                                      )}
                                     </div>
-                                  </TableCell>
-                                  <TableCell className="text-right text-xs whitespace-nowrap px-2 sm:px-3 py-2 sm:py-3">{Number(entry.protein.toFixed(1))}g</TableCell>
-                                  <TableCell className="text-right text-xs whitespace-nowrap px-2 sm:px-3 py-2 sm:py-3">{Number(entry.carbs.toFixed(1))}g</TableCell>
-                                  <TableCell className="text-right text-xs whitespace-nowrap px-2 sm:px-3 py-2 sm:py-3">{Number(entry.fat.toFixed(1))}g</TableCell>
-                                  <TableCell className="text-right font-semibold text-xs whitespace-nowrap px-2 sm:px-3 py-2 sm:py-3">{Number(entry.calories.toFixed(1))}</TableCell>
-                                </TableRow>
-                              ))}
-                            </>
-                          )
-                        })}
-                      </TableBody>
-                    </Table>
-                  </div>
-                </div>
+                                    {/* Right side: timestamp and meal description */}
+                                    <div className="flex-1 min-w-0 flex flex-col">
+                                      <span className="text-xs text-muted-foreground whitespace-nowrap mb-1">{format(entry.timestamp, 'HH:mm')}</span>
+                                      <span className="text-xs break-words min-w-0 overflow-wrap-anywhere">
+                                        {editingMealId === entry.id && isRecording ? (
+                                          <span className="text-muted-foreground italic">Recording...</span>
+                                        ) : editingMealId === entry.id && isTranscribing ? (
+                                          <span className="text-muted-foreground italic">Transcribing...</span>
+                                        ) : editingMealId === entry.id && isAnalyzing ? (
+                                          <span className="text-muted-foreground italic">Analyzing...</span>
+                                        ) : (
+                                          entry.description
+                                        )}
+                                      </span>
+                                    </div>
+                                  </div>
+                                </TableCell>
+                                <TableCell className="text-right text-xs whitespace-nowrap px-2 sm:px-3 py-2 sm:py-3">{Number(entry.protein.toFixed(1))}g</TableCell>
+                                <TableCell className="text-right text-xs whitespace-nowrap px-2 sm:px-3 py-2 sm:py-3">{Number(entry.carbs.toFixed(1))}g</TableCell>
+                                <TableCell className="text-right text-xs whitespace-nowrap px-2 sm:px-3 py-2 sm:py-3">{Number(entry.fat.toFixed(1))}g</TableCell>
+                                <TableCell className="text-right font-semibold text-xs whitespace-nowrap px-2 sm:px-3 py-2 sm:py-3">{Number(entry.calories.toFixed(1))}</TableCell>
+                              </TableRow>
+                            ))}
+                          </Fragment>
+                        )
+                      })
+                    })()}
+                  </TableBody>
+                </Table>
               </div>
-            ))}
+            </div>
           </div>
         )}
 
