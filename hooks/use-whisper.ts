@@ -13,6 +13,7 @@ interface UseWhisperReturn {
   modelLoadProgress: number
   transcript: string
   error: string | null
+  volume: number // 0-1 normalized volume level
   startRecording: (context?: string) => Promise<void>
   stopRecording: () => Promise<void>
 }
@@ -30,12 +31,16 @@ export function useWhisper(options: UseWhisperOptions = {}): UseWhisperReturn {
   const [modelLoadProgress, setModelLoadProgress] = useState(0)
   const [transcript, setTranscript] = useState('')
   const [error, setError] = useState<string | null>(null)
+  const [volume, setVolume] = useState(0)
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null)
   const audioChunksRef = useRef<Blob[]>([])
   const transcriber = useRef<any>(null)
   const audioContextRef = useRef<AudioContext | null>(null)
   const recordingContextRef = useRef<string | undefined>(undefined)
+  const analyserRef = useRef<AnalyserNode | null>(null)
+  const animationFrameRef = useRef<number | null>(null)
+  const streamRef = useRef<MediaStream | null>(null)
 
   const initializeTranscriber = useCallback(async () => {
     if (transcriber.current) return transcriber.current
@@ -120,6 +125,7 @@ export function useWhisper(options: UseWhisperOptions = {}): UseWhisperReturn {
       recordingContextRef.current = context
       setError(null)
       setTranscript('')
+      setVolume(0)
       audioChunksRef.current = []
 
       const stream = await navigator.mediaDevices.getUserMedia({
@@ -128,7 +134,20 @@ export function useWhisper(options: UseWhisperOptions = {}): UseWhisperReturn {
           sampleRate: 16000
         }
       })
+      streamRef.current = stream
       console.log('Got media stream')
+
+      // Create audio context and analyser for volume visualization
+      if (!audioContextRef.current) {
+        audioContextRef.current = new AudioContext({ sampleRate: 16000 })
+      }
+      const analyser = audioContextRef.current.createAnalyser()
+      analyser.fftSize = 256
+      analyser.smoothingTimeConstant = 0.8
+      analyserRef.current = analyser
+
+      const source = audioContextRef.current.createMediaStreamSource(stream)
+      source.connect(analyser)
 
       const mediaRecorder = new MediaRecorder(stream, {
         mimeType: 'audio/webm'
@@ -142,13 +161,38 @@ export function useWhisper(options: UseWhisperOptions = {}): UseWhisperReturn {
         }
       }
 
+      // Start volume monitoring
+      const dataArray = new Uint8Array(analyser.frequencyBinCount)
+      let isMonitoring = true
+      const updateVolume = () => {
+        if (analyserRef.current && isMonitoring) {
+          analyserRef.current.getByteFrequencyData(dataArray)
+          // Calculate RMS (Root Mean Square) for better volume representation
+          const sum = dataArray.reduce((acc, value) => acc + value * value, 0)
+          const rms = Math.sqrt(sum / dataArray.length)
+          const normalizedVolume = Math.min(rms / 128, 1) // Normalize to 0-1
+          setVolume(normalizedVolume)
+          animationFrameRef.current = requestAnimationFrame(updateVolume)
+        }
+      }
+      updateVolume()
+
       mediaRecorder.onstop = async () => {
+        isMonitoring = false
         console.log('Recording stopped, processing audio...')
         const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' })
         console.log('Audio blob created:', audioBlob.size, 'bytes')
 
+        // Stop volume monitoring
+        if (animationFrameRef.current) {
+          cancelAnimationFrame(animationFrameRef.current)
+          animationFrameRef.current = null
+        }
+        setVolume(0)
+
         // Stop all tracks
         stream.getTracks().forEach(track => track.stop())
+        streamRef.current = null
 
         // Transcribe the audio
         try {
@@ -200,14 +244,24 @@ export function useWhisper(options: UseWhisperOptions = {}): UseWhisperReturn {
       const error = err instanceof Error ? err : new Error('Failed to start recording')
       setError(error.message)
       if (onError) onError(error)
+      setVolume(0)
+      if (animationFrameRef.current) {
+        cancelAnimationFrame(animationFrameRef.current)
+        animationFrameRef.current = null
+      }
     }
-  }, [initializeTranscriber, convertAudioBlob, onTranscriptionComplete, onError])
+  }, [initializeTranscriber, convertAudioBlob, onTranscriptionComplete, onError, isRecording])
 
   const stopRecording = useCallback(async () => {
     console.log('Stopping recording...')
     if (mediaRecorderRef.current && isRecording) {
       mediaRecorderRef.current.stop()
       setIsRecording(false)
+      setVolume(0)
+      if (animationFrameRef.current) {
+        cancelAnimationFrame(animationFrameRef.current)
+        animationFrameRef.current = null
+      }
       console.log('Recording stop requested')
     }
   }, [isRecording])
@@ -215,6 +269,12 @@ export function useWhisper(options: UseWhisperOptions = {}): UseWhisperReturn {
   // Cleanup on unmount
   useEffect(() => {
     return () => {
+      if (animationFrameRef.current) {
+        cancelAnimationFrame(animationFrameRef.current)
+      }
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach(track => track.stop())
+      }
       if (audioContextRef.current) {
         audioContextRef.current.close()
       }
@@ -228,6 +288,7 @@ export function useWhisper(options: UseWhisperOptions = {}): UseWhisperReturn {
     modelLoadProgress,
     transcript,
     error,
+    volume,
     startRecording,
     stopRecording
   }

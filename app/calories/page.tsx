@@ -1,13 +1,13 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { useAuth } from "@/contexts/auth-context"
-import { saveMeal, subscribeToMeals, deleteMeal, MealEntry as FirestoreMealEntry } from "@/lib/firebase"
+import { saveMeal, subscribeToMeals, deleteMeal, MealEntry as FirestoreMealEntry, db, safeGetDocs } from "@/lib/firebase"
+import { collection, query, orderBy } from "firebase/firestore"
 import { Button } from "@/components/ui/button"
 import { UserNav } from "@/components/user-nav"
-import { StickyActionButton } from "@/components/ui/sticky-action-button"
 import Link from "next/link"
-import { Pencil, Trash2, X, Check } from "lucide-react"
+import { PencilSimple, Trash, X, Check } from "phosphor-react"
 import {
   Table,
   TableBody,
@@ -25,6 +25,7 @@ import {
 } from "@/components/ui/accordion"
 import { useWhisper } from "@/hooks/use-whisper"
 import { Progress } from "@/components/ui/progress"
+import { Microphone, Stop } from "phosphor-react"
 
 interface FoodEntry {
   id: string
@@ -120,6 +121,9 @@ export default function CaloriesPage() {
   const [error, setError] = useState<string | null>(null)
   const [editingMealId, setEditingMealId] = useState<string | null>(null)
   const [deletingMealId, setDeletingMealId] = useState<string | null>(null)
+  const [displayTranscript, setDisplayTranscript] = useState<string>("")
+  const [calorieTarget, setCalorieTarget] = useState<number>(2000) // Default to 2000
+  const fadeTimeoutRef = useRef<NodeJS.Timeout | null>(null)
 
   const {
     isRecording,
@@ -128,12 +132,24 @@ export default function CaloriesPage() {
     modelLoadProgress,
     transcript,
     error: whisperError,
+    volume,
     startRecording,
     stopRecording
   } = useWhisper({
     onTranscriptionComplete: (text, mealId) => {
+      setDisplayTranscript(text)
       analyzeFood(text, mealId || null)
       setEditingMealId(null)
+      
+      // Clear any existing timeout
+      if (fadeTimeoutRef.current) {
+        clearTimeout(fadeTimeoutRef.current)
+      }
+      
+      // Fade out after 4 seconds
+      fadeTimeoutRef.current = setTimeout(() => {
+        setDisplayTranscript("")
+      }, 4000)
     },
     onError: (err) => {
       setError(err.message)
@@ -150,6 +166,31 @@ export default function CaloriesPage() {
       setDeletingMealId(null);
     }
   }
+
+  // Load calorie target from stats
+  useEffect(() => {
+    if (!user) return
+
+    const loadCalorieTarget = async () => {
+      try {
+        const caloriesRef = collection(db, "calories", user.uid, "entries")
+        const q = query(caloriesRef, orderBy("date", "desc"))
+        const snapshot = await safeGetDocs(q)
+        
+        if (!snapshot.empty && snapshot.docs.length > 0) {
+          const latestEntry = snapshot.docs[0].data()
+          setCalorieTarget(latestEntry.calories)
+        } else {
+          setCalorieTarget(2000) // Default to 2000 if no entries
+        }
+      } catch (error) {
+        console.error("Error loading calorie target:", error)
+        setCalorieTarget(2000) // Default to 2000 on error
+      }
+    }
+
+    loadCalorieTarget()
+  }, [user])
 
   // Subscribe to meals from Firestore
   useEffect(() => {
@@ -169,6 +210,15 @@ export default function CaloriesPage() {
 
     return () => unsubscribe()
   }, [user])
+
+  // Cleanup timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (fadeTimeoutRef.current) {
+        clearTimeout(fadeTimeoutRef.current)
+      }
+    }
+  }, [])
 
   const handleStartRecording = (mealId?: string) => {
     setEditingMealId(mealId || null)
@@ -228,6 +278,45 @@ export default function CaloriesPage() {
     }
   }
 
+  // Calculate weekly calories for chart - past 7 days with today on the far right
+  const getWeeklyCalories = () => {
+    const today = new Date()
+    const todayStart = startOfDay(today)
+    
+    // Get the past 7 days (6 days ago through today)
+    const weekData = Array.from({ length: 7 }, (_, index) => {
+      const daysAgo = 6 - index // 6, 5, 4, 3, 2, 1, 0 (today)
+      const date = new Date(todayStart)
+      date.setDate(todayStart.getDate() - daysAgo)
+      
+      const dayStart = startOfDay(date)
+      const dayEnd = new Date(dayStart)
+      dayEnd.setHours(23, 59, 59, 999)
+      
+      const dayEntries = foodEntries.filter(entry => {
+        const entryDate = entry.timestamp
+        return entryDate >= dayStart && entryDate <= dayEnd
+      })
+      
+      const totalCalories = dayEntries.reduce((sum, entry) => sum + entry.calories, 0)
+      
+      // Get day abbreviation (M, T, W, T, F, S, S)
+      const dayAbbr = format(date, 'EEEEE') // Single letter day abbreviation
+      
+      return {
+        day: dayAbbr,
+        calories: totalCalories,
+        isToday: isSameDay(date, today),
+        date: date
+      }
+    })
+    
+    return weekData
+  }
+
+  const weeklyCalories = getWeeklyCalories()
+  const maxCalories = Math.max(...weeklyCalories.map(d => d.calories), calorieTarget)
+
   return (
     <>
       <div className="container mx-auto py-8 px-4 max-w-3xl pb-32">
@@ -240,35 +329,157 @@ export default function CaloriesPage() {
           <UserNav />
         </div>
 
-        <div className="mt-8 space-y-6">
-          {/* Model loading progress */}
-          {isModelLoading && (
-            <div className="p-4 rounded-lg border bg-card text-card-foreground">
-              <p className="text-sm text-muted-foreground mb-2">
-                Loading speech model... (one-time download, ~74MB)
-              </p>
-              <Progress value={modelLoadProgress} className="h-2" />
-              <p className="text-xs text-muted-foreground mt-2 text-center">
-                {modelLoadProgress}%
-              </p>
+        {/* Model loading progress */}
+        {isModelLoading && (
+          <div className="mt-8 p-4 rounded-lg border bg-card text-card-foreground">
+            <p className="text-sm text-muted-foreground mb-2">
+              Loading speech model... (one-time download, ~74MB)
+            </p>
+            <Progress value={modelLoadProgress} className="h-2" />
+            <p className="text-xs text-muted-foreground mt-2 text-center">
+              {modelLoadProgress}%
+            </p>
+          </div>
+        )}
+
+        {/* Main recording interface */}
+        <div className="flex flex-col items-center justify-center mt-16 mb-16">
+          {/* Title */}
+          {!isRecording && !isModelLoading && (
+            <h2 className="text-3xl font-bold mb-12">What did you eat?</h2>
+          )}
+          
+          {isRecording && (
+            <h2 className="text-3xl font-bold mb-12">Listening</h2>
+          )}
+
+          {/* Record button with volume circles */}
+          <div className="relative flex items-center justify-center">
+            {/* Animated volume circles */}
+            {isRecording && (
+              <>
+                {[1, 2, 3, 4].map((circle) => {
+                  const circleSize = 120 + circle * 40
+                  const opacity = Math.max(0.1, volume - (circle - 1) * 0.2)
+                  const scale = 1 + volume * 0.3 + (circle - 1) * 0.1
+                  
+                  return (
+                    <div
+                      key={circle}
+                      className="absolute rounded-full border-2 border-orange-500"
+                      style={{
+                        width: `${circleSize}px`,
+                        height: `${circleSize}px`,
+                        opacity: opacity,
+                        transform: `scale(${scale})`,
+                        transition: 'opacity 0.1s ease-out, transform 0.1s ease-out',
+                      }}
+                    />
+                  )
+                })}
+              </>
+            )}
+
+            {/* Record/Stop button */}
+            <button
+              onClick={() => isRecording ? stopRecording() : handleStartRecording()}
+              disabled={isModelLoading || isTranscribing || isAnalyzing}
+              className={`
+                relative z-10 rounded-full p-8
+                ${isRecording 
+                  ? 'bg-orange-500 hover:bg-orange-600' 
+                  : 'bg-orange-500 hover:bg-orange-600'
+                }
+                ${isModelLoading || isTranscribing || isAnalyzing 
+                  ? 'opacity-50 cursor-not-allowed' 
+                  : 'cursor-pointer'
+                }
+                transition-all duration-200
+                focus:outline-none focus:ring-4 focus:ring-orange-300
+                ${isRecording ? 'ring-4 ring-white' : ''}
+              `}
+              style={{
+                width: '120px',
+                height: '120px',
+              }}
+            >
+              {isRecording ? (
+                <Stop className="w-12 h-12 text-white mx-auto" weight="fill" />
+              ) : (
+                <Microphone className="w-12 h-12 text-white mx-auto" weight="fill" />
+              )}
+            </button>
+          </div>
+
+          {/* Transcribed text display */}
+          {displayTranscript && (
+            <div 
+              className="mt-8 px-6 py-4 bg-black text-white rounded-lg text-center max-w-md animate-in fade-in duration-300"
+            >
+              <p className="text-base">{displayTranscript}</p>
             </div>
           )}
 
-          {/* Transcription and analysis status */}
-          {(transcript || isAnalyzing || isTranscribing) && !isModelLoading && (
-            <div className="p-4 rounded-lg border bg-card text-card-foreground">
-              {isTranscribing && (
-                <p className="text-sm text-muted-foreground">Transcribing audio...</p>
-              )}
-              {transcript && !isTranscribing && <p className="text-lg">{transcript}</p>}
-              {isAnalyzing && (
-                <p className="text-sm text-muted-foreground mt-2">Analyzing your meal...</p>
-              )}
-              {(error || whisperError) && (
-                <p className="text-sm text-[#F15A1B] mt-2">{error || whisperError}</p>
-              )}
+          {/* Error display */}
+          {(error || whisperError) && (
+            <div className="mt-4 px-4 py-2 bg-red-100 text-red-700 rounded-lg text-sm">
+              {error || whisperError}
             </div>
           )}
+        </div>
+
+        {/* Weekly calorie chart */}
+        <div className="mt-16 mb-8">
+          <div className="flex items-end gap-2 h-32 relative">
+            {/* Y-axis label and target line */}
+            <div className="flex flex-col justify-start h-full pr-4 relative">
+              <span className="text-sm text-muted-foreground">{calorieTarget.toLocaleString()} cal</span>
+              <div 
+                className="absolute left-0 right-0 border-t border-dashed border-gray-400"
+                style={{ top: `${100 - (calorieTarget / maxCalories) * 100}%` }}
+              />
+            </div>
+            
+            {/* Bars */}
+            <div className="flex-1 flex items-end gap-2 h-full relative">
+              {/* Target line across all bars */}
+              <div 
+                className="absolute left-0 right-0 border-t border-dashed border-gray-400"
+                style={{ bottom: `${(calorieTarget / maxCalories) * 100}%` }}
+              />
+              
+              {weeklyCalories.map((dayData, index) => {
+                const height = maxCalories > 0 ? (dayData.calories / maxCalories) * 100 : 0
+                
+                return (
+                  <div key={index} className="flex-1 flex flex-col items-center h-full relative z-10">
+                    <div className="w-full flex flex-col items-center justify-end h-full">
+                      {/* Bar */}
+                      <div
+                        className={`w-full rounded-t transition-all duration-300 ${
+                          dayData.isToday 
+                            ? 'bg-orange-500' 
+                            : 'bg-gray-300'
+                        }`}
+                        style={{
+                          height: `${height}%`,
+                          minHeight: dayData.calories > 0 ? '4px' : '0',
+                        }}
+                      />
+                    </div>
+                    
+                    {/* Day label */}
+                    <div className="mt-2 text-xs text-muted-foreground">
+                      {dayData.day}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        </div>
+
+        <div className="mt-8 space-y-6">
 
         {foodEntries.length > 0 && (
           <div className="space-y-6">
@@ -322,7 +533,7 @@ export default function CaloriesPage() {
                                   }}
                                   disabled={isRecording || isTranscribing || isAnalyzing || isModelLoading || deletingMealId === entry.id}
                                 >
-                                  <Pencil className="h-4 w-4" />
+                                  <PencilSimple className="h-4 w-4" weight="regular" />
                                 </Button>
                                 {deletingMealId === entry.id ? (
                                   <div className="flex flex-col gap-0.5">
@@ -332,7 +543,7 @@ export default function CaloriesPage() {
                                       className="h-4 w-8 text-green-600 hover:text-green-700"
                                       onClick={() => handleDeleteMeal(entry.id)}
                                     >
-                                      <Check className="h-3 w-3" />
+                                      <Check className="h-3 w-3" weight="bold" />
                                     </Button>
                                     <Button
                                       variant="ghost"
@@ -340,7 +551,7 @@ export default function CaloriesPage() {
                                       className="h-4 w-8 text-muted-foreground"
                                       onClick={() => setDeletingMealId(null)}
                                     >
-                                      <X className="h-3 w-3" />
+                                      <X className="h-3 w-3" weight="bold" />
                                     </Button>
                                   </div>
                                 ) : (
@@ -351,7 +562,7 @@ export default function CaloriesPage() {
                                     onClick={() => setDeletingMealId(entry.id)}
                                     disabled={isRecording || isTranscribing || isAnalyzing}
                                   >
-                                    <Trash2 className="h-4 w-4" />
+                                    <Trash className="h-4 w-4" weight="regular" />
                                   </Button>
                                 )}
                               </div>
@@ -413,24 +624,8 @@ export default function CaloriesPage() {
           ))}
         </div>
         */}
+        </div>
       </div>
-      </div>
-
-      <StickyActionButton
-        onClick={() => isRecording ? stopRecording() : handleStartRecording()}
-        variant={isRecording ? "destructive" : "default"}
-        disabled={isModelLoading || isTranscribing || isAnalyzing}
-      >
-        {isModelLoading
-          ? `Loading model... ${modelLoadProgress}%`
-          : isRecording
-          ? "Stop Recording"
-          : isTranscribing
-          ? "Transcribing..."
-          : isAnalyzing
-          ? "Analyzing..."
-          : "What did you eat?"}
-      </StickyActionButton>
     </>
   )
 }
