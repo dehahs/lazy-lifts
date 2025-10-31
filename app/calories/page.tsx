@@ -118,6 +118,7 @@ export default function CaloriesPage() {
   const [displayTranscript, setDisplayTranscript] = useState<string>("")
   const [calorieTarget, setCalorieTarget] = useState<number>(2000) // Default to 2000
   const [expandedDays, setExpandedDays] = useState<Set<string>>(new Set([startOfDay(new Date()).toISOString()]))
+  const [activeDate, setActiveDate] = useState<Date>(startOfDay(new Date()))
   const fadeTimeoutRef = useRef<NodeJS.Timeout | null>(null)
 
   const {
@@ -440,14 +441,23 @@ export default function CaloriesPage() {
               
               {weeklyCalories.map((dayData, index) => {
                 const height = maxCalories > 0 ? (dayData.calories / maxCalories) * 100 : 0
+                const isActive = isSameDay(dayData.date, activeDate)
                 
                 return (
-                  <div key={index} className="flex-1 flex flex-col items-center h-full relative z-10">
+                  <div 
+                    key={index} 
+                    className="flex-1 flex flex-col items-center h-full relative z-10 cursor-pointer transition-all duration-300"
+                    onClick={() => {
+                      setActiveDate(dayData.date)
+                      const dayKey = startOfDay(dayData.date).toISOString()
+                      setExpandedDays(new Set([dayKey]))
+                    }}
+                  >
                     <div className="w-full flex flex-col items-center justify-end h-full">
                       {/* Bar */}
                       <div
                         className={`w-full rounded-t transition-all duration-300 ${
-                          dayData.isToday
+                          isActive
                             ? 'bg-[#F15A1B]'
                             : 'bg-gray-300'
                         }`}
@@ -459,7 +469,7 @@ export default function CaloriesPage() {
                     </div>
                     
                     {/* Day label */}
-                    <div className="mt-2 text-xs text-muted-foreground">
+                    <div className={`mt-2 text-xs ${isActive ? 'text-[#F15A1B] font-semibold' : 'text-muted-foreground'}`}>
                       {dayData.day}
                     </div>
                   </div>
@@ -525,8 +535,13 @@ export default function CaloriesPage() {
                             {/* Parent row - Daily total */}
                             <TableRow 
                               key={dayKey}
-                              className="bg-muted/50 cursor-pointer hover:bg-muted/70"
+                              className={`cursor-pointer transition-colors ${
+                                isSameDay(dailyTotal.date, activeDate)
+                                  ? 'bg-[#F15A1B]/20 hover:bg-[#F15A1B]/30'
+                                  : 'bg-muted/50 hover:bg-muted/70'
+                              }`}
                               onClick={() => {
+                                setActiveDate(dailyTotal.date)
                                 const newExpanded = new Set(expandedDays)
                                 if (isExpanded) {
                                   newExpanded.delete(dayKey)
