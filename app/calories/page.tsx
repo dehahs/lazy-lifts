@@ -18,7 +18,8 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { format, isSameDay, startOfDay } from "date-fns"
-import { useSpeechRecognition } from "@/hooks/use-speech-recognition"
+import { useWhisper } from "@/hooks/use-whisper"
+import { Progress } from "@/components/ui/progress"
 import { Microphone, Stop } from "phosphor-react"
 
 interface FoodEntry {
@@ -131,17 +132,17 @@ export default function CaloriesPage() {
     volume,
     startRecording,
     stopRecording
-  } = useSpeechRecognition({
+  } = useWhisper({
     onTranscriptionComplete: (text, mealId) => {
       setDisplayTranscript(text)
       analyzeFood(text, mealId || null)
       setEditingMealId(null)
-      
+
       // Clear any existing timeout
       if (fadeTimeoutRef.current) {
         clearTimeout(fadeTimeoutRef.current)
       }
-      
+
       // Fade out after 4 seconds
       fadeTimeoutRef.current = setTimeout(() => {
         setDisplayTranscript("")
@@ -332,14 +333,26 @@ export default function CaloriesPage() {
           <UserNav />
         </div>
 
+        {/* Model loading progress */}
+        {isModelLoading && (
+          <div className="mt-8 p-4 rounded-lg border bg-card text-card-foreground">
+            <p className="text-sm text-muted-foreground mb-2">
+              Loading speech model... (one-time download, ~140MB)
+            </p>
+            <Progress value={modelLoadProgress} className="h-2" />
+            <p className="text-xs text-muted-foreground mt-2 text-center">
+              {modelLoadProgress}%
+            </p>
+          </div>
+        )}
 
         {/* Main recording interface */}
         <div className="flex flex-col items-center justify-center mt-16 mb-16">
           {/* Title */}
-          {!isRecording && (
+          {!isRecording && !isModelLoading && (
             <h2 className="text-3xl font-bold mb-12">What did you eat?</h2>
           )}
-          
+
           {isRecording && (
             <h2 className="text-3xl font-bold mb-12">Listening</h2>
           )}
@@ -374,14 +387,14 @@ export default function CaloriesPage() {
             {/* Record/Stop button */}
             <button
               onClick={() => isRecording ? stopRecording() : handleStartRecording()}
-              disabled={isTranscribing || isAnalyzing}
+              disabled={isModelLoading || isTranscribing || isAnalyzing}
               className={`
                 relative z-10 rounded-full p-8
                 ${isRecording
                   ? 'bg-[#F15A1B] hover:bg-[#D14815]'
                   : 'bg-[#F15A1B] hover:bg-[#D14815]'
                 }
-                ${isTranscribing || isAnalyzing
+                ${isModelLoading || isTranscribing || isAnalyzing
                   ? 'opacity-50 cursor-not-allowed'
                   : 'cursor-pointer'
                 }
@@ -411,11 +424,13 @@ export default function CaloriesPage() {
         </div>
 
         {/* Transcribed text display - fixed at bottom of viewport */}
-        {displayTranscript && (
-          <div 
+        {(isTranscribing || displayTranscript) && (
+          <div
             className="fixed bottom-8 left-1/2 transform -translate-x-1/2 px-6 py-4 bg-black text-white rounded-lg text-center max-w-md animate-in fade-in duration-300 z-50"
           >
-            <p className="text-base">{displayTranscript}</p>
+            <p className="text-base">
+              {isTranscribing && !displayTranscript ? "Transcribing..." : displayTranscript}
+            </p>
           </div>
         )}
 
@@ -584,7 +599,7 @@ export default function CaloriesPage() {
                                           e.stopPropagation();
                                           handleStartRecording(entry.id);
                                         }}
-                                        disabled={isRecording || isTranscribing || isAnalyzing || deletingMealId === entry.id}
+                                        disabled={isRecording || isTranscribing || isAnalyzing || isModelLoading || deletingMealId === entry.id}
                                       >
                                         <Microphone className="h-4 w-4 sm:h-5 sm:w-5 text-[#F15A1B]" weight="fill" />
                                       </Button>
