@@ -342,7 +342,7 @@ export default function CaloriesPage() {
         {isModelLoading && (
           <div className="mt-8 p-4 rounded-lg border bg-card text-card-foreground">
             <p className="text-sm text-muted-foreground mb-2">
-              Loading speech model... (one-time download, ~140MB)
+              Loading speech recognition model...
             </p>
             <Progress value={modelLoadProgress} className="h-2" />
             <p className="text-xs text-muted-foreground mt-2 text-center">

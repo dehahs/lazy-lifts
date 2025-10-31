@@ -16,6 +16,7 @@ interface UseWhisperReturn {
   volume: number // 0-1 normalized volume level
   startRecording: (context?: string) => Promise<void>
   stopRecording: () => Promise<void>
+  preloadModel: () => Promise<void>
 }
 
 export function useWhisper(options: UseWhisperOptions = {}): UseWhisperReturn {
@@ -45,15 +46,26 @@ export function useWhisper(options: UseWhisperOptions = {}): UseWhisperReturn {
   const recordingStartTimeRef = useRef<number>(0)
   const sourceNodeRef = useRef<MediaStreamAudioSourceNode | null>(null)
 
-  const initializeTranscriber = useCallback(async () => {
+  const initializeTranscriber = useCallback(async (showProgress = true) => {
     if (transcriber.current) return transcriber.current
 
     try {
-      setIsModelLoading(true)
-      setModelLoadProgress(0)
-      setError(null)
-
       console.log('Loading Whisper model...')
+
+      // Track if we're actually downloading (vs loading from cache)
+      let isDownloading = false
+      let showUITimeoutId: NodeJS.Timeout | null = null
+      const startTime = Date.now()
+
+      // Only show UI if loading takes more than 1 second (indicates download, not cache)
+      if (showProgress) {
+        showUITimeoutId = setTimeout(() => {
+          isDownloading = true
+          setIsModelLoading(true)
+          setModelLoadProgress(0)
+          setError(null)
+        }, 1000) // 1 second delay
+      }
 
       // Dynamically import to avoid SSR issues
       const { pipeline } = await import('@xenova/transformers')
@@ -64,25 +76,40 @@ export function useWhisper(options: UseWhisperOptions = {}): UseWhisperReturn {
         {
           progress_callback: (progress: any) => {
             console.log('Model loading progress:', progress)
-            if (progress.status === 'progress' && progress.total) {
-              const percentage = Math.round((progress.loaded / progress.total) * 100)
-              setModelLoadProgress(percentage)
-            } else if (progress.status === 'ready') {
-              setModelLoadProgress(100)
+
+            if (showProgress && isDownloading) {
+              // Update progress bar if we're showing UI
+              if (progress.status === 'progress' && progress.total) {
+                const percentage = Math.round((progress.loaded / progress.total) * 100)
+                setModelLoadProgress(percentage)
+              } else if (progress.status === 'ready') {
+                setModelLoadProgress(100)
+              }
             }
           }
         }
       )
 
-      console.log('Model loaded successfully')
-      setIsModelLoading(false)
-      setModelLoadProgress(100)
+      // Clear timeout if model loaded quickly (from cache)
+      if (showUITimeoutId) {
+        clearTimeout(showUITimeoutId)
+      }
+
+      const loadTime = Date.now() - startTime
+      console.log(`Model loaded in ${loadTime}ms`)
+
+      if (showProgress && isDownloading) {
+        setIsModelLoading(false)
+        setModelLoadProgress(100)
+      }
       return transcriber.current
     } catch (err) {
       console.error('Error loading model:', err)
       const error = err instanceof Error ? err : new Error('Failed to load model')
-      setError(error.message)
-      setIsModelLoading(false)
+      if (showProgress) {
+        setError(error.message)
+        setIsModelLoading(false)
+      }
       if (onError) onError(error)
       throw error
     }
@@ -328,6 +355,11 @@ export function useWhisper(options: UseWhisperOptions = {}): UseWhisperReturn {
     }
   }, [isRecording])
 
+  // Preload model silently (no UI feedback)
+  const preloadModel = useCallback(async () => {
+    await initializeTranscriber(false)
+  }, [initializeTranscriber])
+
   // Cleanup on unmount
   useEffect(() => {
     return () => {
@@ -360,6 +392,7 @@ export function useWhisper(options: UseWhisperOptions = {}): UseWhisperReturn {
     error,
     volume,
     startRecording,
-    stopRecording
+    stopRecording,
+    preloadModel
   }
 }
