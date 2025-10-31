@@ -316,6 +316,11 @@ export default function CaloriesPage() {
 
   return (
     <>
+      {/* Fade overlay when recording */}
+      {isRecording && (
+        <div className="fixed inset-0 bg-white/95 z-40 transition-opacity duration-300" />
+      )}
+
       <div className="container mx-auto py-8 px-4 max-w-3xl pb-32">
         <div className="flex justify-between items-start mb-8">
           <div className="flex-shrink-0">
@@ -347,30 +352,39 @@ export default function CaloriesPage() {
         )}
 
         {/* Main recording interface */}
-        <div className="flex flex-col items-center justify-center mt-16 mb-16">
+        <div
+          className={`
+            flex flex-col items-center justify-center
+            transition-all duration-300
+            ${isRecording
+              ? 'fixed inset-0 z-50'
+              : 'mt-16 mb-16'
+            }
+          `}
+        >
           {/* Title */}
           {!isRecording && !isModelLoading && (
             <h2 className="text-3xl font-bold mb-12">What did you eat?</h2>
           )}
 
           {isRecording && (
-            <h2 className="text-3xl font-bold mb-12">Listening</h2>
+            <h2 className="text-3xl font-bold mb-12 z-50">Listening</h2>
           )}
 
           {/* Record button with volume circles */}
-          <div className="relative flex items-center justify-center">
+          <div className="relative flex items-center justify-center z-50">
             {/* Animated volume circles */}
             {isRecording && (
               <>
                 {[1, 2, 3, 4].map((circle) => {
-                  const circleSize = 240 + circle * 40
+                  const circleSize = 264 + circle * 44 // 10% larger than original
                   const opacity = Math.max(0.1, volume - (circle - 1) * 0.2)
                   const scale = 1 + volume * 0.3 + (circle - 1) * 0.1
-                  
+
                   return (
                     <div
                       key={circle}
-                      className="absolute rounded-full border-2 border-[#F15A1B]"
+                      className="absolute rounded-full border-2 border-[#F15A1B] z-40"
                       style={{
                         width: `${circleSize}px`,
                         height: `${circleSize}px`,
@@ -389,7 +403,7 @@ export default function CaloriesPage() {
               onClick={() => isRecording ? stopRecording() : handleStartRecording()}
               disabled={isModelLoading || isTranscribing || isAnalyzing}
               className={`
-                relative z-10 rounded-full p-8
+                relative z-50 rounded-full p-8
                 ${isRecording
                   ? 'bg-[#F15A1B] hover:bg-[#D14815]'
                   : 'bg-[#F15A1B] hover:bg-[#D14815]'
@@ -398,13 +412,13 @@ export default function CaloriesPage() {
                   ? 'opacity-50 cursor-not-allowed'
                   : 'cursor-pointer'
                 }
-                transition-all duration-200
+                transition-all duration-300
                 focus:outline-none focus:ring-4 focus:ring-[#F15A1B]/30
                 ${isRecording ? 'ring-4 ring-white' : ''}
               `}
               style={{
-                width: '240px',
-                height: '240px',
+                width: isRecording ? '264px' : '240px',
+                height: isRecording ? '264px' : '240px',
               }}
             >
               {isRecording ? (
@@ -426,7 +440,7 @@ export default function CaloriesPage() {
         {/* Transcribed text display - fixed at bottom of viewport */}
         {(isTranscribing || displayTranscript) && (
           <div
-            className="fixed bottom-8 left-1/2 transform -translate-x-1/2 px-6 py-4 bg-black text-white rounded-lg text-center max-w-md animate-in fade-in duration-300 z-50"
+            className="fixed bottom-8 left-1/2 transform -translate-x-1/2 px-6 py-4 bg-black text-white rounded-lg text-center max-w-md animate-in fade-in duration-300 z-[60]"
           >
             <p className="text-base">
               {isTranscribing && !displayTranscript ? "Transcribing..." : displayTranscript}
