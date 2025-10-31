@@ -20,7 +20,7 @@ interface UseWhisperReturn {
 
 export function useWhisper(options: UseWhisperOptions = {}): UseWhisperReturn {
   const {
-    model = 'Xenova/whisper-tiny.en',
+    model = 'Xenova/whisper-base',
     onTranscriptionComplete,
     onError
   } = options
@@ -41,6 +41,9 @@ export function useWhisper(options: UseWhisperOptions = {}): UseWhisperReturn {
   const analyserRef = useRef<AnalyserNode | null>(null)
   const animationFrameRef = useRef<number | null>(null)
   const streamRef = useRef<MediaStream | null>(null)
+  const isMonitoringRef = useRef<boolean>(false)
+  const recordingStartTimeRef = useRef<number>(0)
+  const sourceNodeRef = useRef<MediaStreamAudioSourceNode | null>(null)
 
   const initializeTranscriber = useCallback(async () => {
     if (transcriber.current) return transcriber.current
@@ -127,11 +130,13 @@ export function useWhisper(options: UseWhisperOptions = {}): UseWhisperReturn {
       setTranscript('')
       setVolume(0)
       audioChunksRef.current = []
+      recordingStartTimeRef.current = Date.now()
 
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: {
-          channelCount: 1,
-          sampleRate: 16000
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true
         }
       })
       streamRef.current = stream
@@ -139,7 +144,7 @@ export function useWhisper(options: UseWhisperOptions = {}): UseWhisperReturn {
 
       // Create audio context and analyser for volume visualization
       if (!audioContextRef.current) {
-        audioContextRef.current = new AudioContext({ sampleRate: 16000 })
+        audioContextRef.current = new AudioContext()
       }
       const analyser = audioContextRef.current.createAnalyser()
       analyser.fftSize = 256
@@ -148,10 +153,27 @@ export function useWhisper(options: UseWhisperOptions = {}): UseWhisperReturn {
 
       const source = audioContextRef.current.createMediaStreamSource(stream)
       source.connect(analyser)
+      sourceNodeRef.current = source
 
-      const mediaRecorder = new MediaRecorder(stream, {
-        mimeType: 'audio/webm'
-      })
+      // Start volume monitoring
+      isMonitoringRef.current = true
+      const dataArray = new Uint8Array(analyser.frequencyBinCount)
+      const updateVolume = () => {
+        if (isMonitoringRef.current && analyserRef.current) {
+          analyserRef.current.getByteFrequencyData(dataArray)
+          // Calculate RMS (Root Mean Square) for better volume representation
+          const sum = dataArray.reduce((acc, value) => acc + value * value, 0)
+          const rms = Math.sqrt(sum / dataArray.length)
+          const normalizedVolume = Math.min(rms / 128, 1) // Normalize to 0-1
+          setVolume(normalizedVolume)
+          if (isMonitoringRef.current) {
+            animationFrameRef.current = requestAnimationFrame(updateVolume)
+          }
+        }
+      }
+      updateVolume()
+
+      const mediaRecorder = new MediaRecorder(stream)
       mediaRecorderRef.current = mediaRecorder
 
       mediaRecorder.ondataavailable = (event) => {
@@ -161,27 +183,45 @@ export function useWhisper(options: UseWhisperOptions = {}): UseWhisperReturn {
         }
       }
 
-      // Start volume monitoring
-      const dataArray = new Uint8Array(analyser.frequencyBinCount)
-      let isMonitoring = true
-      const updateVolume = () => {
-        if (analyserRef.current && isMonitoring) {
-          analyserRef.current.getByteFrequencyData(dataArray)
-          // Calculate RMS (Root Mean Square) for better volume representation
-          const sum = dataArray.reduce((acc, value) => acc + value * value, 0)
-          const rms = Math.sqrt(sum / dataArray.length)
-          const normalizedVolume = Math.min(rms / 128, 1) // Normalize to 0-1
-          setVolume(normalizedVolume)
-          animationFrameRef.current = requestAnimationFrame(updateVolume)
-        }
-      }
-      updateVolume()
-
       mediaRecorder.onstop = async () => {
-        isMonitoring = false
-        console.log('Recording stopped, processing audio...')
+        isMonitoringRef.current = false
+        const recordingDuration = Date.now() - recordingStartTimeRef.current
+        console.log('Recording stopped, duration:', recordingDuration, 'ms')
+
         const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' })
         console.log('Audio blob created:', audioBlob.size, 'bytes')
+
+        // Check if recording is too short
+        if (recordingDuration < 1000) {
+          console.warn('Recording too short:', recordingDuration, 'ms')
+          setError('Recording too short. Please speak for at least 1 second.')
+          setIsTranscribing(false)
+          setIsRecording(false)
+          setVolume(0)
+          if (animationFrameRef.current) {
+            cancelAnimationFrame(animationFrameRef.current)
+            animationFrameRef.current = null
+          }
+          stream.getTracks().forEach(track => track.stop())
+          streamRef.current = null
+          return
+        }
+
+        // Check if audio blob is too small
+        if (audioBlob.size < 1000) {
+          console.warn('Audio blob too small:', audioBlob.size, 'bytes')
+          setError('No audio detected. Please check your microphone.')
+          setIsTranscribing(false)
+          setIsRecording(false)
+          setVolume(0)
+          if (animationFrameRef.current) {
+            cancelAnimationFrame(animationFrameRef.current)
+            animationFrameRef.current = null
+          }
+          stream.getTracks().forEach(track => track.stop())
+          streamRef.current = null
+          return
+        }
 
         // Stop volume monitoring
         if (animationFrameRef.current) {
@@ -196,9 +236,6 @@ export function useWhisper(options: UseWhisperOptions = {}): UseWhisperReturn {
 
         // Transcribe the audio
         try {
-          setIsTranscribing(true)
-          setError(null)
-
           console.log('Initializing transcriber...')
           const transcriber = await initializeTranscriber()
 
@@ -244,10 +281,25 @@ export function useWhisper(options: UseWhisperOptions = {}): UseWhisperReturn {
       const error = err instanceof Error ? err : new Error('Failed to start recording')
       setError(error.message)
       if (onError) onError(error)
+
+      // Clean up on error
+      isMonitoringRef.current = false
       setVolume(0)
       if (animationFrameRef.current) {
         cancelAnimationFrame(animationFrameRef.current)
         animationFrameRef.current = null
+      }
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach(track => track.stop())
+        streamRef.current = null
+      }
+      if (sourceNodeRef.current) {
+        try {
+          sourceNodeRef.current.disconnect()
+        } catch (e) {
+          // Ignore disconnect errors
+        }
+        sourceNodeRef.current = null
       }
     }
   }, [initializeTranscriber, convertAudioBlob, onTranscriptionComplete, onError, isRecording])
@@ -255,12 +307,22 @@ export function useWhisper(options: UseWhisperOptions = {}): UseWhisperReturn {
   const stopRecording = useCallback(async () => {
     console.log('Stopping recording...')
     if (mediaRecorderRef.current && isRecording) {
+      isMonitoringRef.current = false
+      setIsTranscribing(true) // Set immediately for better UX
       mediaRecorderRef.current.stop()
       setIsRecording(false)
       setVolume(0)
       if (animationFrameRef.current) {
         cancelAnimationFrame(animationFrameRef.current)
         animationFrameRef.current = null
+      }
+      if (sourceNodeRef.current) {
+        try {
+          sourceNodeRef.current.disconnect()
+        } catch (e) {
+          // Ignore disconnect errors
+        }
+        sourceNodeRef.current = null
       }
       console.log('Recording stop requested')
     }
@@ -269,8 +331,16 @@ export function useWhisper(options: UseWhisperOptions = {}): UseWhisperReturn {
   // Cleanup on unmount
   useEffect(() => {
     return () => {
+      isMonitoringRef.current = false
       if (animationFrameRef.current) {
         cancelAnimationFrame(animationFrameRef.current)
+      }
+      if (sourceNodeRef.current) {
+        try {
+          sourceNodeRef.current.disconnect()
+        } catch (e) {
+          // Ignore disconnect errors
+        }
       }
       if (streamRef.current) {
         streamRef.current.getTracks().forEach(track => track.stop())
