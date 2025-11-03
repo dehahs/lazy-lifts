@@ -1006,36 +1006,42 @@ export default function CaloriesPage() {
         </div>
 
         {/* Food input bar - fixed at bottom */}
-        <div className="fixed bottom-0 left-0 right-0 z-50 bg-[#F15A1B] px-4 py-3">
-          <form onSubmit={handleTextSubmit} className="max-w-3xl mx-auto flex items-center gap-3">
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              className="h-10 w-10 p-0 text-white hover:bg-white/20"
-              onClick={() => handleStartRecording()}
-              disabled={isRecording || isModelLoading || isTranscribing || isAnalyzing}
-            >
-              <Microphone className="h-5 w-5" weight="fill" />
-            </Button>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              className="h-10 w-10 p-0 text-white hover:bg-white/20"
-              onClick={handlePhotoClick}
-              disabled={isRecording || isModelLoading || isTranscribing || isAnalyzing}
-            >
-              <Camera className="h-5 w-5" weight="fill" />
-            </Button>
-            <Input
-              type="text"
-              placeholder="What did you eat?"
-              value={textInput}
-              onChange={(e) => setTextInput(e.target.value)}
-              className="flex-1 bg-white text-black placeholder:text-gray-500 focus-visible:ring-2 focus-visible:ring-white/50"
-              disabled={isRecording || isModelLoading || isTranscribing || isAnalyzing}
-            />
+        <div className="fixed bottom-0 left-0 right-0 z-50 px-4 pb-4">
+          <form onSubmit={handleTextSubmit} className="max-w-3xl mx-auto flex items-center rounded-full border-2 border-[#D14815] shadow-2xl overflow-hidden bg-[#FFF5F0]">
+            {/* Left section - Orange with icons */}
+            <div className="bg-[#F15A1B] flex items-center gap-2 px-3 py-2">
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 p-0 text-white hover:bg-white/20"
+                onClick={() => handleStartRecording()}
+                disabled={isRecording || isModelLoading || isTranscribing || isAnalyzing}
+              >
+                <Microphone className="h-5 w-5" weight="fill" />
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 p-0 text-white hover:bg-white/20"
+                onClick={handlePhotoClick}
+                disabled={isRecording || isModelLoading || isTranscribing || isAnalyzing}
+              >
+                <Camera className="h-5 w-5" weight="fill" />
+              </Button>
+            </div>
+            {/* Right section - Pale orange with input */}
+            <div className="flex-1 bg-[#FFF5F0] px-4 py-2">
+              <Input
+                type="text"
+                placeholder="What did you eat?"
+                value={textInput}
+                onChange={(e) => setTextInput(e.target.value)}
+                className="w-full bg-transparent border-0 text-gray-800 placeholder:text-gray-500 focus-visible:ring-0 focus-visible:ring-offset-0 p-0 h-auto"
+                disabled={isRecording || isModelLoading || isTranscribing || isAnalyzing}
+              />
+            </div>
           </form>
         </div>
       </div>
