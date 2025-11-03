@@ -38,6 +38,7 @@ export function useSpeechRecognition(options: UseSpeechRecognitionOptions = {}):
   const animationFrameRef = useRef<number | null>(null)
   const streamRef = useRef<MediaStream | null>(null)
   const finalTranscriptRef = useRef<string>('')
+  const currentTranscriptRef = useRef<string>('') // Includes interim results
   const manuallyStoppedRef = useRef<boolean>(false)
   const isMonitoringRef = useRef<boolean>(false)
   const hasErrorRef = useRef<boolean>(false)
@@ -56,6 +57,7 @@ export function useSpeechRecognition(options: UseSpeechRecognitionOptions = {}):
       setTranscript('')
       setVolume(0)
       finalTranscriptRef.current = ''
+      currentTranscriptRef.current = ''
       manuallyStoppedRef.current = false
       hasErrorRef.current = false
 
@@ -70,6 +72,10 @@ export function useSpeechRecognition(options: UseSpeechRecognitionOptions = {}):
       })
       streamRef.current = stream
       console.log('Got media stream')
+      console.log('Audio tracks:', stream.getAudioTracks())
+      console.log('Track enabled:', stream.getAudioTracks()[0]?.enabled)
+      console.log('Track muted:', stream.getAudioTracks()[0]?.muted)
+      console.log('Track settings:', stream.getAudioTracks()[0]?.getSettings())
 
       // Create audio context and analyser for volume visualization
       if (!audioContextRef.current) {
@@ -86,13 +92,31 @@ export function useSpeechRecognition(options: UseSpeechRecognitionOptions = {}):
       // Start volume monitoring
       const dataArray = new Uint8Array(analyser.frequencyBinCount)
       isMonitoringRef.current = true
+      console.log('Starting volume monitoring, frequencyBinCount:', analyser.frequencyBinCount)
+
+      let debugCount = 0
       const updateVolume = () => {
         if (analyserRef.current && isMonitoringRef.current) {
           analyserRef.current.getByteFrequencyData(dataArray)
+
+          // Debug: Log raw data every 30 frames (about once per second)
+          debugCount++
+          if (debugCount % 30 === 0) {
+            const max = Math.max(...Array.from(dataArray))
+            const avg = dataArray.reduce((a, b) => a + b, 0) / dataArray.length
+            console.log('Raw audio data - Max:', max, 'Avg:', avg, 'Sample:', dataArray.slice(0, 10))
+          }
+
           // Calculate RMS (Root Mean Square) for better volume representation
           const sum = dataArray.reduce((acc, value) => acc + value * value, 0)
           const rms = Math.sqrt(sum / dataArray.length)
           const normalizedVolume = Math.min(rms / 128, 1) // Normalize to 0-1
+
+          // Log only when there's significant volume
+          if (normalizedVolume > 0.01) {
+            console.log('Volume detected:', normalizedVolume)
+          }
+
           setVolume(normalizedVolume)
           animationFrameRef.current = requestAnimationFrame(updateVolume)
         }
@@ -110,6 +134,11 @@ export function useSpeechRecognition(options: UseSpeechRecognitionOptions = {}):
 
       recognition.onstart = () => {
         console.log('Speech recognition started')
+        console.log('Recognition settings:', {
+          continuous: recognition.continuous,
+          interimResults: recognition.interimResults,
+          lang: recognition.lang
+        })
         setIsRecording(true)
         setIsModelLoading(false)
         setModelLoadProgress(100)
@@ -117,7 +146,33 @@ export function useSpeechRecognition(options: UseSpeechRecognitionOptions = {}):
         hasErrorRef.current = false
       }
 
+      recognition.onspeechstart = () => {
+        console.log('Speech detected!')
+      }
+
+      recognition.onspeechend = () => {
+        console.log('Speech ended')
+      }
+
+      recognition.onsoundstart = () => {
+        console.log('Sound detected!')
+      }
+
+      recognition.onsoundend = () => {
+        console.log('Sound ended')
+      }
+
+      recognition.onaudiostart = () => {
+        console.log('Audio capture started')
+      }
+
+      recognition.onaudioend = () => {
+        console.log('Audio capture ended')
+      }
+
       recognition.onresult = (event: any) => {
+        console.log('onresult fired! Event:', event)
+        console.log('Results length:', event.results.length)
         let interimTranscript = ''
         let finalTranscript = ''
 
@@ -137,7 +192,14 @@ export function useSpeechRecognition(options: UseSpeechRecognitionOptions = {}):
 
         // Display interim + final transcript
         const displayText = (finalTranscriptRef.current + interimTranscript).trim()
+        currentTranscriptRef.current = displayText // Save current transcript including interim
         setTranscript(displayText)
+
+        console.log('Transcript update:', {
+          final: finalTranscriptRef.current,
+          interim: interimTranscript,
+          current: currentTranscriptRef.current
+        })
       }
 
       recognition.onerror = (event: any) => {
@@ -168,6 +230,7 @@ export function useSpeechRecognition(options: UseSpeechRecognitionOptions = {}):
         
         // Clear any partial transcript on error
         finalTranscriptRef.current = ''
+        currentTranscriptRef.current = ''
         setTranscript('')
         
         if (onError) {
@@ -205,23 +268,36 @@ export function useSpeechRecognition(options: UseSpeechRecognitionOptions = {}):
         }
 
         // Only process transcript if we manually stopped and have text
-        if (manuallyStoppedRef.current && finalTranscriptRef.current.trim()) {
-          setIsTranscribing(true)
-          
-          // Small delay to ensure final transcript is captured
-          setTimeout(() => {
-            const finalText = finalTranscriptRef.current.trim()
-            setTranscript(finalText)
-            setIsTranscribing(false)
-            setIsRecording(false)
+        if (manuallyStoppedRef.current) {
+          // Use currentTranscript which includes interim results
+          const finalText = currentTranscriptRef.current.trim()
+          console.log('Processing transcript:', {
+            current: currentTranscriptRef.current,
+            final: finalTranscriptRef.current,
+            result: finalText
+          })
 
-            if (onTranscriptionComplete && finalText) {
-              const context = recordingContextRef.current
-              console.log('Calling onTranscriptionComplete with context:', context)
-              onTranscriptionComplete(finalText, context)
-              recordingContextRef.current = undefined // Clear after use
-            }
-          }, 100)
+          if (finalText) {
+            setIsTranscribing(true)
+
+            // Small delay to ensure final transcript is captured
+            setTimeout(() => {
+              setTranscript(finalText)
+              setIsTranscribing(false)
+              setIsRecording(false)
+
+              if (onTranscriptionComplete) {
+                const context = recordingContextRef.current
+                console.log('Calling onTranscriptionComplete with text:', finalText, 'context:', context)
+                onTranscriptionComplete(finalText, context)
+                recordingContextRef.current = undefined // Clear after use
+              }
+            }, 100)
+          } else {
+            console.log('No transcript captured')
+            setIsRecording(false)
+            setIsTranscribing(false)
+          }
         } else {
           // If not manually stopped, just reset state
           setIsRecording(false)
@@ -232,6 +308,15 @@ export function useSpeechRecognition(options: UseSpeechRecognitionOptions = {}):
 
       recognition.start()
       console.log('Recording started')
+
+      // Add a test timeout to see if recognition is working
+      setTimeout(() => {
+        console.log('5 seconds elapsed. Current transcript:', {
+          current: currentTranscriptRef.current,
+          final: finalTranscriptRef.current,
+          isRecording: isRecording
+        })
+      }, 5000)
     } catch (err) {
       console.error('Start recording error:', err)
       const error = err instanceof Error ? err : new Error('Failed to start recording')

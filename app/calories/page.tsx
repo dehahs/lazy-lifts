@@ -18,8 +18,7 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { format, isSameDay, startOfDay } from "date-fns"
-import { useWhisper } from "@/hooks/use-whisper"
-import { Progress } from "@/components/ui/progress"
+import { useOpenAIWhisper } from "@/hooks/use-openai-whisper"
 import { Microphone, Stop } from "phosphor-react"
 import { Input } from "@/components/ui/input"
 import { Toaster } from "@/components/ui/toaster"
@@ -165,7 +164,7 @@ export default function CaloriesPage() {
     volume,
     startRecording,
     stopRecording
-  } = useWhisper({
+  } = useOpenAIWhisper({
     onTranscriptionComplete: (text, mealId) => {
       setDisplayTranscript(text)
       analyzeFood(text, mealId || null)
@@ -510,19 +509,6 @@ export default function CaloriesPage() {
           </div>
           <UserNav />
         </div>
-
-        {/* Model loading progress */}
-        {isModelLoading && (
-          <div className="mt-8 p-4 rounded-lg border bg-card text-card-foreground">
-            <p className="text-sm text-muted-foreground mb-2">
-              Loading speech recognition model...
-            </p>
-            <Progress value={modelLoadProgress} className="h-2" />
-            <p className="text-xs text-muted-foreground mt-2 text-center">
-              {modelLoadProgress}%
-            </p>
-          </div>
-        )}
 
         {/* Listening overlay when recording */}
         {isRecording && (
