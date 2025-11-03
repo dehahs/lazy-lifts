@@ -153,6 +153,7 @@ export default function CaloriesPage() {
   const [isCountingCalories, setIsCountingCalories] = useState(false)
   const [datePickerOpen, setDatePickerOpen] = useState(false)
   const analyzeTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+  const cameraInputRef = useRef<HTMLInputElement | null>(null)
 
   const {
     isRecording,
@@ -372,17 +373,70 @@ export default function CaloriesPage() {
   }
 
   const handlePhotoClick = () => {
-    setCustomMessage("Coming soon")
-    
-    // Clear any existing timeout
-    if (customMessageTimeoutRef.current) {
-      clearTimeout(customMessageTimeoutRef.current)
+    // Trigger the camera input
+    if (cameraInputRef.current) {
+      cameraInputRef.current.click()
     }
-    
-    // Clear message after 3 seconds
-    customMessageTimeoutRef.current = setTimeout(() => {
-      setCustomMessage("")
-    }, 3000)
+  }
+
+  const handlePhotoCapture = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    if (!file || !user) return
+
+    try {
+      setIsAnalyzing(true)
+      setError(null)
+
+      // Send photo to API
+      const formData = new FormData()
+      formData.append('image', file)
+
+      const response = await fetch('/api/analyze-photo', {
+        method: 'POST',
+        body: formData
+      })
+
+      if (!response.ok) {
+        throw new Error('Failed to analyze photo')
+      }
+
+      const data = await response.json()
+
+      // Show the description as displayTranscript
+      setDisplayTranscript(data.description)
+
+      // Clear any existing timeout
+      if (fadeTimeoutRef.current) {
+        clearTimeout(fadeTimeoutRef.current)
+      }
+
+      // Fade out after 4 seconds
+      fadeTimeoutRef.current = setTimeout(() => {
+        setDisplayTranscript("")
+      }, 4000)
+
+      // Save the meal
+      const newEntry: FoodEntry = {
+        id: Date.now().toString(),
+        timestamp: new Date(),
+        description: data.description,
+        calories: data.calories,
+        protein: data.protein,
+        carbs: data.carbs,
+        fat: data.fat
+      }
+
+      await saveMeal(user.uid, newEntry)
+    } catch (err) {
+      console.error('Photo analysis error:', err)
+      setError(err instanceof Error ? err.message : 'Failed to analyze photo')
+    } finally {
+      setIsAnalyzing(false)
+      // Reset the input so the same file can be selected again
+      if (cameraInputRef.current) {
+        cameraInputRef.current.value = ''
+      }
+    }
   }
 
   const handleTextSubmit = (e: React.FormEvent) => {
@@ -671,15 +725,8 @@ export default function CaloriesPage() {
                     <Button
                       variant="outline"
                       className="rounded-full px-6 py-3 bg-[#F15A1B] text-white border-[#F15A1B] hover:bg-[#D14815]"
-                      onClick={() => {
-                        setCustomMessage("Coming soon")
-                        if (customMessageTimeoutRef.current) {
-                          clearTimeout(customMessageTimeoutRef.current)
-                        }
-                        customMessageTimeoutRef.current = setTimeout(() => {
-                          setCustomMessage("")
-                        }, 3000)
-                      }}
+                      onClick={handlePhotoClick}
+                      disabled={isAnalyzing}
                     >
                       <Camera className="h-5 w-5 mr-2" />
                       Photo
@@ -1030,6 +1077,16 @@ export default function CaloriesPage() {
             </div>
           </form>
         </div>
+
+        {/* Hidden camera input */}
+        <input
+          ref={cameraInputRef}
+          type="file"
+          accept="image/*"
+          capture="environment"
+          onChange={handlePhotoCapture}
+          className="hidden"
+        />
       </div>
     </>
   )
