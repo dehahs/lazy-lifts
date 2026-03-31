@@ -1,16 +1,20 @@
 import { NextResponse } from 'next/server';
-import OpenAI from 'openai';
+import Anthropic from '@anthropic-ai/sdk';
+import { parseJsonFromAssistantText } from '@/lib/parse-assistant-json';
 
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
+/** Haiku 4.5: vision + text, fast; replaces retired claude-3-5-haiku-20241022 */
+const CALORIE_TEXT_MODEL = 'claude-haiku-4-5';
+
+const anthropic = new Anthropic({
+  apiKey: process.env.ANTHROPIC_API_KEY,
 });
 
 export async function POST(request: Request) {
   try {
-    if (!process.env.OPENAI_API_KEY) {
-      console.error('OpenAI API key is not set');
+    if (!process.env.ANTHROPIC_API_KEY) {
+      console.error('Anthropic API key is not set');
       return NextResponse.json(
-        { error: 'OpenAI API key is not configured' },
+        { error: 'Anthropic API key is not configured' },
         { status: 500 }
       );
     }
@@ -25,26 +29,26 @@ Please provide:
 2. Grams of protein
 3. Grams of carbohydrates
 4. Grams of fat
-Format the response as a JSON object with these exact keys: calories, protein, carbs, fat`;
+Format the response as a JSON object with these exact keys: calories, protein, carbs, fat. Return only valid JSON, no markdown.`;
 
-    const completion = await openai.chat.completions.create({
-      model: "gpt-3.5-turbo",
-      messages: [
-        {
-          role: "system",
-          content: "You are a nutrition expert that analyzes food descriptions and provides calorie and macronutrient estimates. Always respond with valid JSON."
-        },
-        {
-          role: "user",
-          content: prompt
-        }
-      ],
-      response_format: { type: "json_object" }
+    const response = await anthropic.messages.create({
+      model: CALORIE_TEXT_MODEL,
+      max_tokens: 500,
+      system:
+        'You are a nutrition expert that analyzes food descriptions and provides calorie and macronutrient estimates. Always respond with valid JSON only.',
+      messages: [{ role: 'user', content: prompt }],
     });
 
-    const response = completion.choices[0].message.content;
-    console.log('OpenAI response:', response);
-    return NextResponse.json(JSON.parse(response));
+    const textBlock = response.content.find((b) => b.type === 'text');
+    const text =
+      textBlock && textBlock.type === 'text' ? textBlock.text : null;
+    console.log('Anthropic response:', text);
+
+    if (!text) {
+      throw new Error('No response from Anthropic');
+    }
+
+    return NextResponse.json(parseJsonFromAssistantText(text));
   } catch (error) {
     console.error('Error analyzing food:', error);
     return NextResponse.json(

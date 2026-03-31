@@ -15,6 +15,8 @@ import {
   deleteDoc
 } from "firebase/firestore"
 
+// Must reference each NEXT_PUBLIC_* name statically — Next.js only inlines env vars
+// the bundler can see; `process.env[dynamicKey]` is always undefined in the browser.
 const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
   authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
@@ -22,6 +24,31 @@ const firebaseConfig = {
   storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
   messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
   appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
+}
+
+const missingFirebaseEnv: string[] = []
+if (!process.env.NEXT_PUBLIC_FIREBASE_API_KEY) {
+  missingFirebaseEnv.push("NEXT_PUBLIC_FIREBASE_API_KEY")
+}
+if (!process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN) {
+  missingFirebaseEnv.push("NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN")
+}
+if (!process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID) {
+  missingFirebaseEnv.push("NEXT_PUBLIC_FIREBASE_PROJECT_ID")
+}
+if (!process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET) {
+  missingFirebaseEnv.push("NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET")
+}
+if (!process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID) {
+  missingFirebaseEnv.push("NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID")
+}
+if (!process.env.NEXT_PUBLIC_FIREBASE_APP_ID) {
+  missingFirebaseEnv.push("NEXT_PUBLIC_FIREBASE_APP_ID")
+}
+if (missingFirebaseEnv.length > 0) {
+  throw new Error(
+    `Firebase env is incomplete. Add these to .env.local (see README): ${missingFirebaseEnv.join(", ")}`
+  )
 }
 
 const app = initializeApp(firebaseConfig)

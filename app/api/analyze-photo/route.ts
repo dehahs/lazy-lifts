@@ -1,15 +1,30 @@
 import { NextResponse } from 'next/server';
-import OpenAI from 'openai';
+import Anthropic from '@anthropic-ai/sdk';
+import { parseJsonFromAssistantText } from '@/lib/parse-assistant-json';
 
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
+/** Haiku 4.5: vision + structured JSON; replaces retired claude-3-5-haiku-20241022 */
+const CALORIE_VISION_MODEL = 'claude-haiku-4-5';
+
+const anthropic = new Anthropic({
+  apiKey: process.env.ANTHROPIC_API_KEY,
 });
+
+function normalizeImageMediaType(
+  type: string
+): 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp' {
+  const t = type.toLowerCase();
+  if (t === 'image/jpeg' || t === 'image/jpg') return 'image/jpeg';
+  if (t === 'image/png') return 'image/png';
+  if (t === 'image/gif') return 'image/gif';
+  if (t === 'image/webp') return 'image/webp';
+  return 'image/jpeg';
+}
 
 export async function POST(request: Request) {
   try {
-    if (!process.env.OPENAI_API_KEY) {
+    if (!process.env.ANTHROPIC_API_KEY) {
       return NextResponse.json(
-        { error: 'OpenAI API key is not configured' },
+        { error: 'Anthropic API key is not configured' },
         { status: 500 }
       );
     }
@@ -26,21 +41,12 @@ export async function POST(request: Request) {
 
     console.log('Analyzing food photo:', image.name, 'Size:', image.size, 'bytes');
 
-    // Convert image to base64
     const bytes = await image.arrayBuffer();
     const buffer = Buffer.from(bytes);
     const base64Image = buffer.toString('base64');
-    const mimeType = image.type;
+    const mediaType = normalizeImageMediaType(image.type || 'image/jpeg');
 
-    const response = await openai.chat.completions.create({
-      model: 'gpt-4o',
-      messages: [
-        {
-          role: 'user',
-          content: [
-            {
-              type: 'text',
-              text: `Analyze this food image and provide nutritional information. Return ONLY a JSON object with this exact structure (no markdown, no code blocks, just the JSON):
+    const prompt = `Analyze this food image and provide nutritional information. Return ONLY a JSON object with this exact structure (no markdown, no code blocks, just the JSON):
 
 {
   "description": "brief description of the food items visible",
@@ -52,29 +58,39 @@ export async function POST(request: Request) {
 
 If you cannot identify food in the image, return calories, protein, carbs, and fat as 0 and description as "No food detected in image".
 
-Be as accurate as possible with portion sizes and nutritional estimates.`
-            },
-            {
-              type: 'image_url',
-              image_url: {
-                url: `data:${mimeType};base64,${base64Image}`
-              }
-            }
-          ]
-        }
-      ],
+Be as accurate as possible with portion sizes and nutritional estimates.`;
+
+    const response = await anthropic.messages.create({
+      model: CALORIE_VISION_MODEL,
       max_tokens: 500,
+      messages: [
+        {
+          role: 'user',
+          content: [
+            {
+              type: 'image',
+              source: {
+                type: 'base64',
+                media_type: mediaType,
+                data: base64Image,
+              },
+            },
+            { type: 'text', text: prompt },
+          ],
+        },
+      ],
     });
 
-    const content = response.choices[0].message.content;
-    console.log('OpenAI Vision response:', content);
+    const textBlock = response.content.find((b) => b.type === 'text');
+    const content =
+      textBlock && textBlock.type === 'text' ? textBlock.text : null;
+    console.log('Anthropic Vision response:', content);
 
     if (!content) {
-      throw new Error('No response from OpenAI');
+      throw new Error('No response from Anthropic');
     }
 
-    // Parse the JSON response
-    const nutritionData = JSON.parse(content.trim());
+    const nutritionData = parseJsonFromAssistantText(content);
 
     return NextResponse.json(nutritionData);
   } catch (error) {
