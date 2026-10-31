@@ -30,6 +30,11 @@ export function UserNav() {
             Lift
           </Button>
         </Link>
+        <Link href="/bjj">
+          <Button variant="ghost" className="text-base font-medium">
+            BJJ
+          </Button>
+        </Link>
         <div className="ml-auto">
           <Link href="/stats">
             <Button variant="ghost" className="text-base font-medium">
