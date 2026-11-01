@@ -35,10 +35,14 @@ import { cn } from "@/lib/utils"
 import {
   BLOCKS,
   WEEKS,
+  blockFollowAlong,
   exerciseRx,
+  formatTimestamp,
+  youtubeEmbedSrc,
   youtubeSearch,
   type DayNumber,
   type WeekNumber,
+  type YtClip,
 } from "@/lib/bjj-routine"
 
 const STORAGE = {
@@ -65,6 +69,52 @@ function writeStore(key: string, value: string) {
 
 function Html({ html }: { html: string }) {
   return <span dangerouslySetInnerHTML={{ __html: html }} />
+}
+
+function YtEmbed({ clip, title }: { clip: YtClip; title: string }) {
+  const [play, setPlay] = useState(false)
+  const label = clip.label ?? title
+  const caption = [clip.label, clip.t ? `Starts at ${formatTimestamp(clip.t)}` : null]
+    .filter(Boolean)
+    .join(" · ")
+  const frame = clip.shorts
+    ? "aspect-[9/16] w-full max-w-[220px] rounded-md bg-black"
+    : "aspect-video w-full rounded-md bg-black"
+
+  return (
+    <div className="mt-2">
+      {caption ? <p className="text-muted-foreground mb-1">{caption}</p> : null}
+      {play ? (
+        <iframe
+          className={frame}
+          src={youtubeEmbedSrc(clip, true)}
+          title={label}
+          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+          allowFullScreen
+        />
+      ) : (
+        <button
+          type="button"
+          onClick={() => setPlay(true)}
+          className={cn("relative block overflow-hidden bg-slate-900", frame)}
+          aria-label={`Play ${label}`}
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={`https://i.ytimg.com/vi/${clip.id}/hqdefault.jpg`}
+            alt=""
+            className="absolute inset-0 h-full w-full object-cover"
+          />
+          <span className="absolute inset-0 bg-black/20" />
+          <span className="absolute inset-0 flex items-center justify-center">
+            <span className="flex h-12 w-12 items-center justify-center rounded-full bg-[#F15A1B] text-white">
+              <Play className="h-5 w-5 fill-current ml-0.5" />
+            </span>
+          </span>
+        </button>
+      )}
+    </div>
+  )
 }
 
 function CycleGuide({ week }: { week: WeekNumber }) {
@@ -584,6 +634,7 @@ export default function BjjPage() {
           const items = block.both ?? (day === 1 ? block.d1 : block.d2) ?? []
           const key = `${day}-${block.id}`
           const checked = Boolean(done[key])
+          const follow = blockFollowAlong(block, day)
           return (
             <AccordionItem
               key={block.id}
@@ -644,34 +695,48 @@ export default function BjjPage() {
                     Superset · alternate, then rest
                   </Badge>
                 ) : null}
-                <Table>
-                  <TableBody>
-                    {items.map((item) => (
-                      <TableRow key={item.n}>
-                        <TableCell className="pl-0">
+                {follow ? (
+                  <YtEmbed
+                    key={`${day}-${follow.id}`}
+                    clip={follow}
+                    title={`${block.name} follow along`}
+                  />
+                ) : null}
+                <div>
+                  {items.map((item) => (
+                    <div key={item.n} className="py-3 border-b last:border-b-0">
+                      <div className="flex gap-3 justify-between items-baseline">
+                        <p>
                           <span className="font-medium">{item.n}</span>
                           {item.tag ? (
                             <span className="text-muted-foreground ml-2">{item.tag}</span>
                           ) : null}
-                          <div>
-                            <a
-                              href={youtubeSearch(item.q)}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="inline-flex items-center gap-1 text-base"
-                            >
-                              <Play className="h-3 w-3 fill-current" />
-                              Watch demo
-                            </a>
-                          </div>
-                        </TableCell>
-                        <TableCell className="text-right pr-0 whitespace-nowrap text-muted-foreground">
+                        </p>
+                        <p className="text-muted-foreground whitespace-nowrap">
                           {exerciseRx(item, week)}
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
+                        </p>
+                      </div>
+                      {(item.yt ?? []).map((clip) => (
+                        <YtEmbed
+                          key={`${clip.id}-${clip.t ?? 0}-${clip.label ?? ""}`}
+                          clip={clip}
+                          title={item.n}
+                        />
+                      ))}
+                      {!item.yt?.length && item.q ? (
+                        <a
+                          href={youtubeSearch(item.q)}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1 text-base mt-1"
+                        >
+                          <Play className="h-3 w-3 fill-current" />
+                          Watch demo
+                        </a>
+                      ) : null}
+                    </div>
+                  ))}
+                </div>
               </AccordionContent>
             </AccordionItem>
           )
@@ -690,7 +755,7 @@ export default function BjjPage() {
           r/bjj
         </a>
         . Core and pattern-practice set counts are starting points, since the guide doesn&apos;t
-        specify them. Demo links open a YouTube search for each exercise.
+        specify them. Demos are the original guide videos, started at the matching timestamp.
       </p>
     </div>
   )
